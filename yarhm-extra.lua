@@ -6362,61 +6362,38 @@ local function tsbSequence(voidCF, label)
 	local v = victimHRP(stT.target)
 	if not (me and saved and v) then yextraNotify("Lock a target first") return end
 
-	-- try each slot until the target dies; grab connects best when we're ON TOP of them
-	for slot = 1, 4 do
-		stT.charKey = tostring(slot)
-		primeSkillKey()
+	-- reference flow: arm, stick on victim 1s, teleport to void, wait, return, restore victim
+	primeSkillKey()
 
-		-- stick on top of the victim so the grab attaches server-side
-		local t0 = os.clock()
-		while os.clock() - t0 <= 1.2 do
-			if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
-			local v2 = victimHRP(stT.target)
-			if not v2 then break end
-			me.CFrame = CFrame.lookAt(v2.Position + Vector3.new(0, 6, 0), v2.Position)
-			task.wait(0.05)
-		end
-		m1Click() -- cast grab; server now holds them to us
+	local v2 = victimHRP(stT.target)
+	if not v2 then yextraNotify("Target lost") return end
+	local targetSaved = v2.CFrame
 
-		-- move OURSELVES in small steps toward void; the grab drags victim with us
-		-- (client CFrame on victim doesn't replicate; moving ourselves does)
-		local wasAnchored = me.Anchored
-		me.Anchored = true
-		local steps = 20
-		for i = 1, steps do
-			if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
-			local v2 = victimHRP(stT.target)
-			if not v2 then break end
-			local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
-			if not hum or hum.Health <= 0 then break end
-			local alpha = i / steps
-			me.CFrame = saved:Lerp(voidCF, alpha)
-			task.wait(0.1)
-		end
-
-		-- wait a moment at void spot to let fall damage kill them
-		local t1 = os.clock()
-		while os.clock() - t1 <= 3 do
-			if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
-			local v2 = victimHRP(stT.target)
-			if not v2 then break end
-			local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
-			if not hum or hum.Health <= 0 then
-				local cur = myHRP()
-				if cur then cur.Anchored = wasAnchored; cur.CFrame = saved end
-				yextraNotify(label .. " killed on slot " .. slot)
-				return
-			end
-			task.wait(0.1)
-		end
-
-		-- this slot didn't kill; restore ourselves and try next
-		local cur = myHRP()
-		if cur then cur.Anchored = wasAnchored; cur.CFrame = saved end
-		task.wait(0.2)
+	-- stick on victim so grab connects (server-side)
+	local t0 = os.clock()
+	while os.clock() - t0 <= 1 do
+		if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
+		v2 = victimHRP(stT.target)
+		if not v2 then break end
+		me.CFrame = v2.CFrame
+		task.wait(0.1)
 	end
-	yextraNotify(label .. " — no slot killed the target")
+
+	-- teleport OURSELVES to void; server grab drags victim with us
+	me.CFrame = voidCF
+	task.wait(1)
+
+	-- return to start
+	me.CFrame = saved
+	task.wait(1)
+
+	-- cleanup: move dead victim back to their start
+	v2 = victimHRP(stT.target)
+	if v2 then v2.CFrame = targetSaved end
+
+	yextraNotify(label .. " done")
 end
+
 
 local function buildTSBModule()
 	local module = {Name = "The Strongest Battlegrounds", gameId = 3808081382}
