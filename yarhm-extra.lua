@@ -6255,23 +6255,73 @@ local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "
 
 local stT = {target = nil, charKey = "3", afk = nil, follow = false, ghost = false, m1T = 0}
 
-local function pressAbilityKey(hold)
+local function tapAbilityButton()
+	-- mobile arm: tap the game's own ability slot button (slot number may be
+	-- on the button itself or a child TextLabel)
+	local pg = LP:FindFirstChildOfClass("PlayerGui")
+	if not pg then return false end
+	local slot = stT.charKey
+	local best
+	for _, d in ipairs(pg:GetDescendants()) do
+		if d:IsA("TextButton") or d:IsA("ImageButton") then
+			local labels = {d.Text or ""}
+			for _, c in ipairs(d:GetChildren()) do
+				if c:IsA("TextLabel") and c.Text ~= "" then table.insert(labels, c.Text) end
+			end
+			local nameOk = d.Name == slot or (d.Name:match("(%d+)$") == slot and #d.Name <= 10)
+			local textOk = false
+			for _, l in ipairs(labels) do
+				if l == slot then textOk = true break end
+			end
+			if nameOk or textOk then
+				-- prefer buttons under hotbar-ish frames (check 2 levels up)
+				local hot = false
+				local node = d.Parent
+				for _ = 1, 2 do
+					local pn = (node and node.Name or ""):lower()
+					if pn:find("hotbar") or pn:find("ability") or pn:find("skill") or pn:find("mobile") or pn:find("button") then
+						hot = true
+						break
+					end
+					node = node and node.Parent
+				end
+				if hot then
+					best = d
+					break
+				end
+				best = best or d
+			end
+		end
+	end
+	if not best then return false end
+	local fired = false
+	pcall(function()
+		if firesignal then
+			firesignal(best.MouseButton1Click)
+			fired = true
+		end
+	end)
+	if not fired then
+		pcall(function()
+			local a = best.AbsolutePosition + best.AbsoluteSize / 2
+			VU:Button1Down(a)
+			task.wait(0.05)
+			VU:Button1Up(a)
+			fired = true
+		end)
+	end
+	return fired
+end
+
+-- ARM: select the ability slot — PC: number key; mobile: tap the slot button
+local function armAbility(hold)
 	hold = hold or 0.08
-	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
-	local vk = Enum.KeyCode[k[2]]
 	local uis = game:GetService("UserInputService")
 	if uis.TouchEnabled and not uis.KeyboardEnabled then
-		-- mobile: a tap anywhere casts the selected ability; VirtualUser
-		-- (unlike VIM key events) doesn't switch Roblox to PC input mode
-		pcall(function()
-			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-			local center = Vector2.new(vp.X / 2, vp.Y / 2)
-			VU:Button1Down(center)
-			task.wait(hold)
-			VU:Button1Up(center)
-		end)
-		return true
+		return tapAbilityButton()
 	end
+	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
+	local vk = Enum.KeyCode[k[2]]
 	local sent = false
 	-- 1) VirtualInputManager — what TSB actually processes in most executors
 	pcall(function()
@@ -6291,8 +6341,13 @@ local function pressAbilityKey(hold)
 end
 
 local function primeSkillKey()
-	local sent = pressAbilityKey()
-	if not sent then yextraNotify("Ability key send failed (executor blocked VIM/keypress)") return end
+	local armed = armAbility()
+	if not armed then
+		yextraNotify("Ability arm failed (no slot button found / VIM blocked)")
+		return
+	end
+	task.wait(0.15)
+	m1Click() -- cast: click on PC, tap anywhere on mobile
 	-- give the grab/teleport ability a moment to attach the target
 	task.wait(0.3)
 end
@@ -6382,8 +6437,10 @@ local function buildTSBModule()
 		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
 		Test_ability = function(_)
-			local sent = pressAbilityKey()
-			yextraNotify(sent and ("Ability key " .. stT.charKey .. " sent") or "Key send failed")
+			local before = stT.target
+			primeSkillKey()
+			yextraNotify("Arm + cast sent (slot " .. stT.charKey .. ")")
+			stT.target = before
 		end,
 		Dump_hotbar = function(_)
 			-- numbered buttons with their parent + screen position, bottom-right focus
