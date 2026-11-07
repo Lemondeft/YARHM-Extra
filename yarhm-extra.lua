@@ -4880,6 +4880,182 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 		end}
 	})
 	
+	-- ========== NEW FEATURES FROM SCRIPTBLOX TSB LIST ==========
+	
+	-- Invisibility
+	local invisConnection = nil
+	local invisEnabled = false
+	table.insert(module, {
+		Type = "Text",
+		Args = {"Invisibility"}
+	})
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Invisibility", function(Self, state)
+			invisEnabled = state
+			local char = LP.Character
+			if not char then return end
+			
+			if state then
+				invisConnection = rs.RenderStepped:Connect(function()
+					for _, part in ipairs(char:GetDescendants()) do
+						if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+							part.LocalTransparencyModifier = 1
+						elseif part:IsA("Decal") or part:IsA("Texture") then
+							part.LocalTransparencyModifier = 1
+						end
+					end
+					-- Keep accessories invisible too
+					for _, acc in ipairs(char:GetChildren()) do
+						if acc:IsA("Accessory") then
+							for _, p in ipairs(acc:GetDescendants()) do
+								if p:IsA("BasePart") then p.LocalTransparencyModifier = 1 end
+							end
+						end
+					end
+				end)
+			else
+				if invisConnection then invisConnection:Disconnect() invisConnection = nil end
+				for _, part in ipairs(char:GetDescendants()) do
+					if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
+						part.LocalTransparencyModifier = 0
+					elseif part:IsA("Decal") or part:IsA("Texture") then
+						part.LocalTransparencyModifier = 0
+					end
+				end
+				for _, acc in ipairs(char:GetChildren()) do
+					if acc:IsA("Accessory") then
+						for _, p in ipairs(acc:GetDescendants()) do
+							if p:IsA("BasePart") then p.LocalTransparencyModifier = 0 end
+						end
+					end
+				end
+			end
+		end}
+	})
+	
+	-- Click Teleport
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Click Teleport (hold Ctrl+Click)", function(Self, state)
+			if state then
+				clickTPConn = uis.InputBegan:Connect(function(input, gp)
+					if gp then return end
+					if input.UserInputType == Enum.UserInputType.MouseButton1 and uis:IsKeyDown(Enum.KeyCode.LeftControl) then
+						local mouse = LP:GetMouse()
+						if mouse.Hit then
+							local hrp = myHRP()
+							if hrp then hrp.CFrame = mouse.Hit + Vector3.new(0, 5, 0) end
+						end
+					end
+				end)
+			else
+				if clickTPConn then clickTPConn:Disconnect() clickTPConn = nil end
+			end
+		end}
+	})
+	
+	-- Anti Staff
+	local antiStaffConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Anti Staff (kick on staff join)", function(Self, state)
+			if state then
+				antiStaffConn = Players.PlayerAdded:Connect(function(p)
+					if p:GetRankInGroup(0) > 0 then -- placeholder, real check needs group IDs
+						LP:Kick("Staff detected: " .. p.Name)
+					end
+				end)
+			else
+				if antiStaffConn then antiStaffConn:Disconnect() antiStaffConn = nil end
+			end
+		end}
+	})
+	
+	-- Anti Ragdoll
+	local antiRagdollConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Anti Ragdoll", function(Self, state)
+			if state then
+				antiRagdollConn = rs.Heartbeat:Connect(function()
+					local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+					if hum and hum:GetState() == Enum.HumanoidStateType.Ragdoll then
+						hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+					end
+				end)
+			else
+				if antiRagdollConn then antiRagdollConn:Disconnect() antiRagdollConn = nil end
+			end
+		end}
+	})
+	
+	-- Auto Dodge (simple: dash on nearby attack anim)
+	local autoDodgeConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Dodge (dash on nearby attacks)", function(Self, state)
+			if state then
+				autoDodgeConn = rs.Heartbeat:Connect(function()
+					local hrp = myHRP()
+					if not hrp then return end
+					for _, p in ipairs(Players:GetPlayers()) do
+						if p ~= LP and p.Character then
+							local hum = p.Character:FindFirstChildOfClass("Humanoid")
+							local vhrp = p.Character:FindFirstChild("HumanoidRootPart")
+							if hum and vhrp and (vhrp.Position - hrp.Position).Magnitude < 15 then
+								for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+									if track.IsPlaying and track.Length > 0 and track.Length < 2 and track.TimePosition > 0.1 and track.TimePosition < 0.8 then
+										-- dash away
+										pcall(function()
+											VIM:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+											task.wait(0.05)
+											VIM:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+										end)
+										break
+									end
+								end
+							end
+						end
+					end
+				end)
+			else
+				if autoDodgeConn then autoDodgeConn:Disconnect() autoDodgeConn = nil end
+			end
+		end}
+	})
+	
+	-- HipHeight
+	table.insert(module, {
+		Type = "Range",
+		Args = {"HipHeight", 2, 50, 1, function(Self, val)
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.HipHeight = val end
+		end}
+	})
+	
+	-- Click Teleport
+	local clickTPConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Click Teleport (Ctrl+Click)", function(Self, state)
+			if state then
+				clickTPConn = uis.InputBegan:Connect(function(input, gp)
+					if gp then return end
+					if input.UserInputType == Enum.UserInputType.MouseButton1 and uis:IsKeyDown(Enum.KeyCode.LeftControl) then
+						local mouse = LP:GetMouse()
+						if mouse.Hit then
+							local hrp = myHRP()
+							if hrp then hrp.CFrame = mouse.Hit + Vector3.new(0, 5, 0) end
+						end
+					end
+				end)
+			else
+				if clickTPConn then clickTPConn:Disconnect() clickTPConn = nil end
+			end
+		end}
+	})
+	
 	repeat task.wait() until getgenv().Modules
 	getgenv().Modules[1] = module
 end
@@ -6078,6 +6254,31 @@ local function skillKey(key, dur)
 	end)
 end
 
+local function m1ClickMobile()
+	pcall(function()
+		local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+		local center = Vector2.new(vp.X / 2, vp.Y / 2)
+		VU:Button1Down(center)
+		task.wait(0.03)
+		VU:Button1Up(center)
+	end)
+end
+
+local function faceMobile(victimHRPPart)
+	local me = myHRP()
+	if me then me.CFrame = CFrame.lookAt(me.Position, victimHRPPart.Position) end
+end
+
+local function skillKeyMobile(key, dur)
+	dur = dur or 0.08
+	pcall(function()
+		VU:CaptureController()
+		VU:SetKeyDown(key)
+		task.wait(dur)
+		VU:SetKeyUp(key)
+	end)
+end
+
 -- attacking = Action-priority animation track shorter than its full combo length
 local function isAttacking(character)
 	local hum = character:FindFirstChildOfClass("Humanoid")
@@ -6232,33 +6433,32 @@ local function buildJJSModule()
 				if os.clock() - stJ.ghostT >= 0.6 then
 					stJ.ghostT = os.clock()
 					me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 3, v.Position)
-					m1Click()
+					m1ClickMobile()
 					local seq = stJ.keys:sub(1, #stJ.keys)
 					stJ.i = (stJ.i or 0) % math.max(#seq, 1) + 1
-					skillKey(seq:sub(stJ.i, stJ.i))
+					skillKeyMobile(seq:sub(stJ.i, stJ.i))
 					task.wait(0.15)
 					me.CFrame = CFrame.new(v.Position + Vector3.new(0, 150, 0))
 				end
 			elseif stJ.follow then
-				-- teleport-follow: stJ.dist studs in front of the victim, facing them
 				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * stJ.dist, v.Position)
 				if dist <= 13 and os.clock() - stJ.m1 >= 0.35 then
 					stJ.m1 = os.clock()
-					m1Click()
+					m1ClickMobile()
 				end
-			elseif dist > 3 then face(v) end
+			elseif dist > 3 then faceMobile(v) end
 			if stJ.skills and t and dist <= 25 and os.clock() - stJ.kp >= 0.5 then
 				stJ.kp = os.clock()
 				local seq = stJ.keys:sub(1, #stJ.keys)
 				stJ.i = (stJ.i or 0) % math.max(#seq, 1) + 1
-				face(v)
-				skillKey(seq:sub(stJ.i, stJ.i))
+				faceMobile(v)
+				skillKeyMobile(seq:sub(stJ.i, stJ.i))
 			end
 			if stJ.bf and dist <= 8 and os.clock() - stJ.bfT >= 0.4 then
 				stJ.bfT = os.clock()
-				face(v)
-				m1Click()
-				skillKey("R")
+				faceMobile(v)
+				m1ClickMobile()
+				skillKeyMobile("R")
 			end
 			if stJ.block or stJ.dodge then
 				local threat = nearestPlayer(25)
@@ -6609,16 +6809,22 @@ local function buildTSBModule()
 			local v = victimHRP(stT.target or nearestPlayer(25))
 			if not (me and v) then continue end
 			local dist = (v.Position - me.Position).Magnitude
-			if dist > 3 then
-				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 3, v.Position)
+			if dist > 2 then
+				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 2, v.Position)
 			end
-			if dist <= 13 and os.clock() - stT.m1T >= 0.35 then
+			if dist <= 12 and os.clock() - stT.m1T >= 0.25 then
 				stT.m1T = os.clock()
-				m1Click()
+				m1ClickMobile()
 				if stT.ghost then
-					-- pop up out of reach after each hit
 					me.CFrame = CFrame.new(v.Position + Vector3.new(0, 150, 0))
 				end
+			end
+			if stT.skills and dist <= 20 and os.clock() - (stT.kp or 0) >= 0.4 then
+				stT.kp = os.clock()
+				local seq = stT.keys:sub(1, #stT.keys)
+				stT.i = (stT.i or 0) % math.max(#seq, 1) + 1
+				faceMobile(v)
+				skillKeyMobile(seq:sub(stT.i, stT.i))
 			end
 		end
 	end
