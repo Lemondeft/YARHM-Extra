@@ -7237,6 +7237,7 @@ local function EXTRA_routine()
 			-- YARHM only auto-runs BG_TASK for custom modules; built-ins spawn here
 			local m = getgenv().Modules[#getgenv().Modules]
 			if m and m["BG_TASK"] then coroutine.wrap(m["BG_TASK"])() end
+			yextraNotify("TSB module loaded! GameId: " .. game.GameId)
 		end
 	end
 	-- the hub builds the module list during Init; our insert may land after
