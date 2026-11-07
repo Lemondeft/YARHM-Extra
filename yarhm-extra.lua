@@ -6357,35 +6357,53 @@ local function tsbSequence(voidCF, label)
 	local saved = me and me.CFrame
 	local v = victimHRP(stT.target)
 	if not (me and saved and v) then yextraNotify("Lock a target first") return end
-	primeSkillKey()
-	-- stick to the victim so the grab/teleport ability attaches (server moves them)
-	local t0 = os.clock()
-	while os.clock() - t0 <= 1 do
-		local v2 = victimHRP(stT.target)
-		if not v2 then break end
-		me.CFrame = v2.CFrame
-		task.wait(0.05)
-	end
-	m1Click() -- cast the grab now that we're on them
-	-- sit at the void spot while the grab holds them; anchored so we don't die too
-	local wasAnchored = me.Anchored
-	me.Anchored = true
-	me.CFrame = voidCF
-	local t1 = os.clock()
-	while os.clock() - t1 <= 4 do
-		if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
-		local hum = stT.target and stT.target.Character and stT.target.Character:FindFirstChildOfClass("Humanoid")
-		if not hum or hum.Health <= 0 then break end
+
+	-- try each slot until the target dies; grab connects best when we're ON TOP of them
+	for slot = 1, 4 do
+		stT.charKey = tostring(slot)
+		primeSkillKey()
+
+		-- stick on top of the victim so the grab attaches server-side
+		local t0 = os.clock()
+		while os.clock() - t0 <= 1.2 do
+			if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
+			local v2 = victimHRP(stT.target)
+			if not v2 then break end
+			me.CFrame = CFrame.lookAt(v2.Position + Vector3.new(0, 6, 0), v2.Position)
+			task.wait(0.05)
+		end
+		m1Click() -- cast grab
+
+		-- sit at void spot while grab holds them; anchored so we don't die too
+		local wasAnchored = me.Anchored
+		me.Anchored = true
 		me.CFrame = voidCF
-		task.wait(0.1)
+		local t1 = os.clock()
+		while os.clock() - t1 <= 4 do
+			if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
+			local hum = stT.target and stT.target.Character and stT.target.Character:FindFirstChildOfClass("Humanoid")
+			if not hum or hum.Health <= 0 then
+				-- killed them
+				local cur = myHRP()
+				if cur then
+					cur.Anchored = (cur == me) and wasAnchored or false
+					cur.CFrame = saved
+				end
+				yextraNotify(label .. " killed on slot " .. slot)
+				return
+			end
+			me.CFrame = voidCF
+			task.wait(0.1)
+		end
+		-- this slot didn't kill; restore and try next
+		local cur = myHRP()
+		if cur then
+			cur.Anchored = (cur == me) and wasAnchored or false
+			cur.CFrame = saved
+		end
+		task.wait(0.2)
 	end
-	-- return: re-fetch the HRP in case we respawned mid-sequence
-	local cur = myHRP()
-	if cur then
-		cur.Anchored = (cur == me) and wasAnchored or false
-		cur.CFrame = saved
-	end
-	yextraNotify(label .. " done — target dies only if the grab held them server-side")
+	yextraNotify(label .. " — no slot killed the target (grab may not connect on this character)")
 end
 
 local function buildTSBModule()
@@ -6421,19 +6439,31 @@ local function buildTSBModule()
 			local saved = me and me.CFrame
 			local v = victimHRP(stT.target)
 			if not (me and saved and v) then yextraNotify("Lock a target first") return end
-			primeSkillKey()
-			-- stick close so the server's grab pulls them behind you; client
-			-- cannot set another player's CFrame (anti-cheat / network ownership)
-			local t0 = os.clock()
-			while os.clock() - t0 <= 1 do
+			-- try all slots until one grabs; stick on top of the victim
+			for slot = 1, 4 do
+				stT.charKey = tostring(slot)
+				primeSkillKey()
+				local t0 = os.clock()
+				while os.clock() - t0 <= 1 do
+					if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
+					local v2 = victimHRP(stT.target)
+					if not v2 then break end
+					me.CFrame = CFrame.lookAt(v2.Position + Vector3.new(0, 4, 0), v2.Position)
+					task.wait(0.04)
+				end
+				m1Click()
+				-- wait briefly to see if grab attached (target pulled close)
+				task.wait(0.5)
 				local v2 = victimHRP(stT.target)
-				if not v2 then break end
-				me.CFrame = v2.CFrame + Vector3.new(0, 0.5, 0)
-				task.wait(0.02)
+				if v2 and (v2.Position - me.Position).Magnitude < 12 then
+					yextraNotify("Bring grabbed on slot " .. slot)
+					me.CFrame = saved
+					return
+				end
+				task.wait(0.2)
 			end
-			m1Click()
 			me.CFrame = saved
-			yextraNotify("Bring cast — the game moves the target, not this script")
+			yextraNotify("Bring — no slot grabbed the target")
 		end,
 		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
