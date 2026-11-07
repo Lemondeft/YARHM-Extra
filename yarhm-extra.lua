@@ -6042,10 +6042,11 @@ local function isAttacking(character)
 	return false
 end
 
-local listFrame, listCatcher
+local listFrame
+local inputConn
 local function closeList()
+	if inputConn then inputConn:Disconnect() inputConn = nil end
 	if listFrame then listFrame:Destroy() listFrame = nil end
-	if listCatcher then listCatcher:Destroy() listCatcher = nil end
 end
 
 -- expands a player list right under the clicked button
@@ -6059,15 +6060,12 @@ local function expandPlayerList(anchor, onPick)
 	local gui = getgenv().YARHM
 	if not gui then yextraNotify("Hub UI not ready") return end
 
-	-- click anywhere else to close
-	listCatcher = Instance.new("TextButton")
-	listCatcher.Text = ""
-	listCatcher.BackgroundTransparency = 1
-	listCatcher.BorderSizePixel = 0
-	listCatcher.Size = UDim2.new(1, 0, 1, 0)
-	listCatcher.ZIndex = 999999998
-	listCatcher.Parent = gui
-	listCatcher.MouseButton1Click:Connect(closeList)
+	-- no screen-covering catcher; clicking empty space closes the list
+	inputConn = game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
+		if not gp and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+			closeList()
+		end
+	end)
 
 	listFrame = Instance.new("ScrollingFrame")
 	listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
