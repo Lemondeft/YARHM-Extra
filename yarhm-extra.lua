@@ -6265,12 +6265,29 @@ local function tapAbilityButton()
 	local best
 	for _, d in ipairs(pg:GetDescendants()) do
 		if d:IsA("TextButton") or d:IsA("ImageButton") then
-			local label = d:IsA("TextButton") and d.Text or ""
+			-- slot number may be on the button itself or a child TextLabel
+			local labels = {d.Text or ""}
+			for _, c in ipairs(d:GetChildren()) do
+				if c:IsA("TextLabel") and c.Text ~= "" then table.insert(labels, c.Text) end
+			end
 			local nameOk = d.Name == slot or (d.Name:match("(%d+)$") == slot and #d.Name <= 10)
-			local textOk = label == slot
+			local textOk = false
+			for _, l in ipairs(labels) do
+				if l == slot then textOk = true break end
+			end
 			if nameOk or textOk then
-				local pn = (d.Parent and d.Parent.Name or ""):lower()
-				if pn:find("hotbar") or pn:find("ability") or pn:find("skill") or pn:find("mobile") or pn:find("button") then
+				-- prefer buttons under hotbar-ish frames (check 2 levels up)
+				local hot = false
+				local node = d.Parent
+				for _ = 1, 2 do
+					local pn = (node and node.Name or ""):lower()
+					if pn:find("hotbar") or pn:find("ability") or pn:find("skill") or pn:find("mobile") or pn:find("button") then
+						hot = true
+						break
+					end
+					node = node and node.Parent
+				end
+				if hot then
 					best = d
 					break
 				end
@@ -6421,7 +6438,7 @@ local function buildTSBModule()
 			yextraNotify(sent and ("Ability key " .. stT.charKey .. " sent") or "Key send failed")
 		end,
 		Dump_hotbar = function(_)
-			-- sends the names of candidate slot buttons so the path can be hardcoded
+			-- numbered buttons with their parent + screen position, bottom-right focus
 			local pg = LP:FindFirstChildOfClass("PlayerGui")
 			if not pg then yextraNotify("No PlayerGui") return end
 			local found = {}
@@ -6429,12 +6446,14 @@ local function buildTSBModule()
 				if d:IsA("TextButton") or d:IsA("ImageButton") then
 					local label = d:IsA("TextButton") and d.Text or ""
 					if d.Name:match("%d") or label:match("%d") then
-						table.insert(found, d.Name .. (label ~= "" and "(" .. label .. ")" or ""))
-						if #found >= 8 then break end
+						local p = d.AbsolutePosition
+						local parentName = d.Parent and d.Parent.Name or "?"
+						table.insert(found, ("%s(%s)<%s>@%d,%d"):format(d.Name, label, parentName, p.X, p.Y))
+						if #found >= 10 then break end
 					end
 				end
 			end
-			yextraNotify(#found > 0 and table.concat(found, ", ") or "No numbered buttons found")
+			yextraNotify(#found > 0 and table.concat(found, " | ") or "No numbered buttons found")
 		end,
 		TP_to_target = function(_)
 			local me = myHRP()
