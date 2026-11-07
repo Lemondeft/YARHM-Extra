@@ -6799,7 +6799,7 @@ local function buildTSBModule()
 			end)
 			getgenv().YARHM_EXTRA_AFK = stT.afk
 		end
-	end}}}})
+	end}})
 
 	-- No Dash Cooldown
 	table.insert(module, {
