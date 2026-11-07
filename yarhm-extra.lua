@@ -6503,13 +6503,26 @@ local EXTRA_GAMES = {
 
 local function EXTRA_routine()
 	repeat task.wait() until getgenv().Modules
+	local matched = false
 	for _, g in ipairs(EXTRA_GAMES) do
 		if g.GameId == game.GameId then
+			matched = true
 			g.Build()
 			-- YARHM only auto-runs BG_TASK for custom modules; built-ins spawn here
 			local m = getgenv().Modules[#getgenv().Modules]
 			if m and m["BG_TASK"] then coroutine.wrap(m["BG_TASK"])() end
 		end
+	end
+	-- the hub builds the module list during Init; our insert may land after
+	-- that build (race), so rebuild it once the UI is up
+	task.delay(1, function()
+		local f = getgenv().YARHMFUNCTIONS
+		if f and f.refreshlist then pcall(f.refreshlist) end
+	end)
+	if not matched then
+		task.delay(3, function()
+			yextraNotify("No module for GameId " .. tostring(game.GameId) .. " (PlaceId " .. game.PlaceId .. ")")
+		end)
 	end
 end
 
