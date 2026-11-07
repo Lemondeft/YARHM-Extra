@@ -6892,6 +6892,296 @@ local function buildTSBModule()
 		end}
 	})
 	
+	-- Lethal Combat System (from Skidware)
+	local lethalEnabled = false
+	local lethalConn = nil
+	local isExecuting = false
+	local isNoclipping = false
+	local lethalConfig = {
+		Enabled = true,
+		LethalEnabled = true,
+		LethalAnim = "rbxassetid://10503381238",
+		LethalDelay = 0.232,
+		LethalJump = 55,
+		LethalAccuracy = 15,
+		LethalCancelDelay = 0.4,
+		LethalMode = "V1",
+		CancelEnabled = true,
+		CooldownActive = true,
+		NoClipEnabled = true,
+		DashRange = 8,
+		TouchMode = false,
+		Keybind = "E",
+		CooldownAnims = {
+			["10491993682"] = true,
+			["10479335397"] = true,
+			["13380255751"] = true,
+		}
+	}
+	local dashAnims = {["rbxassetid://12296113986"] = true}
+	local isCooldown = false
+	local scriptId = math.random(1, 1000000)
+	_G.SkidwareId = scriptId
+	local function isCurrent() return _G.SkidwareId == scriptId end
+	local function getId(str) return tostring(str):match("%d+") end
+	
+	local function fireDash()
+		local char = LP.Character
+		if not char then return end
+		local communicate = char:FindFirstChild("Communicate")
+		if communicate then
+			local args = {{
+				Dash = Enum.KeyCode.W,
+				Key = Enum.KeyCode.Q,
+				Goal = "KeyPress"
+			}}
+			communicate:FireServer(unpack(args))
+		end
+	end
+	
+	local function clip()
+		isNoclipping = false
+		local char = LP.Character
+		if char then
+			local hum = char:FindFirstChild("Humanoid")
+			if hum then hum.AutoRotate = true end
+		end
+	end
+	
+	local function forceCancel()
+		clip()
+		local char = LP.Character
+		local hrp = char and char:FindFirstChild("HumanoidRootPart")
+		if hrp then
+			for _, obj in pairs(hrp:GetChildren()) do
+				if obj:IsA("BodyVelocity") or obj:IsA("LinearVelocity") or obj:IsA("Attachment") or obj:IsA("BodyAngularVelocity") then
+					obj:Destroy()
+				end
+			end
+			hrp.AssemblyLinearVelocity = Vector3.zero
+		end
+	end
+	
+	local function startCooldown(duration)
+		if not isCurrent() or isCooldown then return end
+		isCooldown = true
+		task.delay(duration, function()
+			isCooldown = false
+		end)
+	end
+	
+	local function getTorsoTarget()
+		local char = LP.Character
+		if not char or not char:FindFirstChild("HumanoidRootPart") then return nil end
+		local params = OverlapParams.new()
+		params.FilterType = Enum.RaycastFilterType.Exclude
+		params.FilterDescendantsInstances = {char}
+		local parts = workspace:GetPartBoundsInRadius(char.HumanoidRootPart.Position, lethalConfig.DashRange, params)
+		local target, dist = nil, lethalConfig.DashRange
+		for _, part in pairs(parts) do
+			local model = part:FindFirstAncestorOfClass("Model")
+			if model and model:FindFirstChild("Humanoid") and model ~= char then
+				local torso = model:FindFirstChild("Torso") or model:FindFirstChild("UpperTorso") or model:FindFirstChild("HumanoidRootPart")
+				if torso then
+					local d = (char.HumanoidRootPart.Position - torso.Position).Magnitude
+					if d < dist then dist = d; target = torso end
+				end
+			end
+		end
+		return target
+	end
+	
+	local function executeLethal()
+		if not isCurrent() or isExecuting or isCooldown then return end
+		if not lethalConfig.Enabled or not lethalConfig.LethalEnabled then return end
+		
+		local char = LP.Character
+		local root = char and char:FindFirstChild("HumanoidRootPart")
+		local hum = char and char:FindFirstChild("Humanoid")
+		if not root or not hum then return end
+
+		local torso = getTorsoTarget()
+		if not torso then clip(); return end
+		
+		isExecuting = true
+		if not lethalConfig.TouchMode then task.wait(lethalConfig.LethalDelay) end
+		if not isCurrent() then isExecuting = false; return end
+		
+		root.AssemblyLinearVelocity = Vector3.new(root.AssemblyLinearVelocity.X, lethalConfig.LethalJump, root.AssemblyLinearVelocity.Z)
+		isNoclipping = true
+		fireDash()
+		
+		local startT = tick()
+		local flipped = false
+		local forwardDir = (torso.Position - root.Position).Unit
+		local sideVec = Vector3.new(-forwardDir.Z, 0, forwardDir.X)
+		local bav = nil
+		
+		if lethalConfig.LethalMode == "V1" then
+			bav = Instance.new("BodyAngularVelocity")
+			bav.MaxTorque = Vector3.new(0, 1000000, 0)
+			bav.P = 15000
+			bav.Parent = root
+		end
+		
+		local conn
+		conn = game:GetService("RunService").Heartbeat:Connect(function()
+			if not isCurrent() or not torso or not torso.Parent or not root or not root.Parent then
+				if bav then bav:Destroy() end
+				clip()
+				isExecuting = false
+				if conn then conn:Disconnect() end
+				return
+			end
+			
+			local elapsed = tick() - startT
+			local torsoPos, rootPos = torso.Position, root.Position
+			hum.AutoRotate = false
+			
+			if lethalConfig.LethalMode == "V1" then
+				local angle = (elapsed / 0.45) * (math.pi / 1.5)
+				local radius = lethalConfig.LethalAccuracy * (1 - math.clamp(elapsed / 0.45, 0, 1))
+				local targetLookPos = torsoPos + (sideVec * math.cos(angle) + forwardDir * math.sin(angle)) * radius
+				local lookAtCF = CFrame.lookAt(rootPos, Vector3.new(targetLookPos.X, rootPos.Y, targetLookPos.Z))
+				local relativeCF = root.CFrame:Inverse() * lookAtCF
+				local _, y, _ = relativeCF:ToEulerAnglesXYZ()
+				if bav and bav.Parent then bav.AngularVelocity = Vector3.new(0, y * 30, 0) end
+			else
+				if elapsed >= lethalConfig.LethalAccuracy and not flipped then
+					root.CFrame = root.CFrame * CFrame.Angles(0, math.pi, 0)
+					flipped = true
+				end
+			end
+
+			local distXZ = (Vector2.new(rootPos.X, rootPos.Z) - Vector2.new(torsoPos.X, torsoPos.Z)).Magnitude
+			if lethalConfig.CancelEnabled and elapsed > lethalConfig.LethalCancelDelay then
+				if distXZ < 2.2 then
+					if bav then bav:Destroy() end
+					forceCancel()
+					isExecuting = false
+					conn:Disconnect()
+					return
+				end
+			end
+			
+			if not lethalConfig.Enabled or elapsed > 1.5 then
+				if bav then bav:Destroy() end
+				clip()
+				isExecuting = false
+				conn:Disconnect()
+				return
+			end
+		end)
+	end
+	
+	-- Lethal UI toggles
+	table.insert(module, {
+		Type = "Text",
+		Args = {"Lethal Combat"}
+	})
+	
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Lethal Enabled", function(_, s)
+			lethalConfig.Enabled = s
+			lethalConfig.LethalEnabled = s
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Lethal Mode V1/V2", function(_, s)
+			lethalConfig.LethalMode = s and "V2" or "V1"
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Lethal Delay", 0, 1, 0.01, function(_, val)
+			lethalConfig.LethalDelay = val
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Lethal Jump Power", 10, 100, 1, function(_, val)
+			lethalConfig.LethalJump = val
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Lethal Accuracy", 1, 30, 1, function(_, val)
+			lethalConfig.LethalAccuracy = val
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Cancel Delay", 0, 1, 0.01, function(_, val)
+			lethalConfig.LethalCancelDelay = val
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Dash Range", 1, 20, 1, function(_, val)
+			lethalConfig.DashRange = val
+		end}
+	})
+	
+	-- Noclip from Skidware
+	local noclipConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Noclip (Skidware)", function(_, s)
+			lethalConfig.NoClipEnabled = s
+			if s then
+				noclipConn = game:GetService("RunService").Stepped:Connect(function()
+					if not lethalConfig.NoClipEnabled then return end
+					if isNoclipping and LP.Character then
+						for _, model in pairs(workspace:GetChildren()) do
+							if model:IsA("Model") and model ~= LP.Character and (model:FindFirstChild("Humanoid") or model:FindFirstChildOfClass("Humanoid")) then
+								for _, part in pairs(model:GetDescendants()) do
+									if part:IsA("BasePart") and part.CanCollide then
+										part.CanCollide = false
+									end
+								end
+							end
+						end
+					end
+				end)
+			else
+				if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+				if LP.Character then
+					for _, part in pairs(LP.Character:GetDescendants()) do
+						if part:IsA("BasePart") then part.CanCollide = true end
+					end
+				end
+			end
+		end}
+	})
+	
+	-- Animation trigger for lethal
+	local function setupLethal(char)
+		if not isCurrent() then return end
+		local hum = char:WaitForChild("Humanoid")
+		hum.AnimationPlayed:Connect(function(track)
+			if not isCurrent() then return end
+			local animId = track.Animation.AnimationId
+			local id = tostring(animId):match("%d+")
+			if lethalConfig.CooldownActive and lethalConfig.CooldownAnims[id] then
+				-- Could add cooldown logic here
+			end
+			if track.Animation.AnimationId == lethalConfig.LethalAnim then
+				executeLethal()
+			end
+		end)
+	end
+	
+	if LP.Character then setupLethal(LP.Character) end
+	LP.CharacterAdded:Connect(setupLethal)
+	
 	module["BG_TASK"] = function()
 		while true do
 			task.wait(0.05)
