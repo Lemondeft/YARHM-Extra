@@ -6372,32 +6372,46 @@ local function tsbSequence(voidCF, label)
 			me.CFrame = CFrame.lookAt(v2.Position + Vector3.new(0, 6, 0), v2.Position)
 			task.wait(0.05)
 		end
-		m1Click() -- cast grab
+		m1Click() -- cast grab; server now holds them to us
 
-		-- client cannot set another player's CFrame once and have it stick
-		-- (network ownership / anti-cheat), so rapid-fire it every frame:
-		-- some frames slip past the check and actually move the victim
+		-- move OURSELVES in small steps toward void; the grab drags victim with us
+		-- (client CFrame on victim doesn't replicate; moving ourselves does)
+		local wasAnchored = me.Anchored
+		me.Anchored = true
+		local steps = 20
+		for i = 1, steps do
+			if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
+			local v2 = victimHRP(stT.target)
+			if not v2 then break end
+			local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
+			if not hum or hum.Health <= 0 then break end
+			local alpha = i / steps
+			me.CFrame = saved:Lerp(voidCF, alpha)
+			task.wait(0.1)
+		end
+
+		-- wait a moment at void spot to let fall damage kill them
 		local t1 = os.clock()
-		while os.clock() - t1 <= 5 do
+		while os.clock() - t1 <= 3 do
 			if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
 			local v2 = victimHRP(stT.target)
 			if not v2 then break end
 			local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
 			if not hum or hum.Health <= 0 then
 				local cur = myHRP()
-				if cur then cur.CFrame = saved end
+				if cur then cur.Anchored = wasAnchored; cur.CFrame = saved end
 				yextraNotify(label .. " killed on slot " .. slot)
 				return
 			end
-			v2.CFrame = voidCF
-			task.wait()
+			task.wait(0.1)
 		end
+
 		-- this slot didn't kill; restore ourselves and try next
 		local cur = myHRP()
-		if cur then cur.CFrame = saved end
+		if cur then cur.Anchored = wasAnchored; cur.CFrame = saved end
 		task.wait(0.2)
 	end
-	yextraNotify(label .. " — no slot moved the target (anti-cheat blocked it)")
+	yextraNotify(label .. " — no slot killed the target")
 end
 
 local function buildTSBModule()
