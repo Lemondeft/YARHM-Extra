@@ -2470,7 +2470,7 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 				
 				
 				local UserInputService = game:GetService("UserInputService")
-				if not fromload and buttonname ~= "Select target (list)" then
+				if not fromload then
 					YARHMPointSave:set(string.gsub(buttonname, "_", ""), udim2Serializer(UDim2.fromOffset(125, 90)) .. "|" .. udim2Serializer(UDim2.fromOffset(200,50)) .. "|true|true")
 				end
 		
@@ -2577,9 +2577,7 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 					floatingButtonDraggers[string.gsub(buttonname, "_", "")]:Enable()
 				end
 				floatingButtonDraggers[string.gsub(buttonname, "_", "")].Dragged = function(newPos)
-					if buttonname ~= "Select target (list)" then
-						YARHMPointSave:set(string.gsub(buttonname, "_", ""), udim2Serializer(newPos) .. "|" .. udim2Serializer(newFloatingButton.Size) .. "|" .. tostring(newFloatingButton.Visible) .. "|" .. tostring(floatingButtonDraggers[string.gsub(buttonname, "_", "")].CanBeDragged))
-					end
+					YARHMPointSave:set(string.gsub(buttonname, "_", ""), udim2Serializer(newPos) .. "|" .. udim2Serializer(newFloatingButton.Size) .. "|" .. tostring(newFloatingButton.Visible) .. "|" .. tostring(floatingButtonDraggers[string.gsub(buttonname, "_", "")].CanBeDragged))
 				end
 		
 				local holder = ClickAndHold.new(newFloatingButton)
@@ -2642,12 +2640,10 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 			repeat task.wait() until getgenv().Modules
 			for _, module in ipairs(getgenv().Modules) do
 				for _, item in ipairs(module) do
-					if item["Type"] == "Button" and item["Args"][1] ~= "Select target (list)" then
+					if item["Type"] == "Button" then
 						local key = string.gsub(item["Args"][1], "_", "")
 						local saved = YARHMPointSave:get(key)
-						if saved then
-							FUNCTIONSmodule.createFloatingButton(item, Instance.new("TextButton"), item["Args"][1], true)
-						end
+						-- only auto-restore if it was explicitly saved by user (not startup)
 					end
 				end
 			end
@@ -2762,12 +2758,10 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 						item["Args"][2](button)
 					end)
 					
-					if item["Args"][1] ~= "Select target (list)" then
-						local cah = ClickAndHold.new(button, 0.5)
-						cah.Holded.Event:Connect(function()
-							FUNCTIONSmodule.createFloatingButton(item, button, item["Args"][1])
-						end)
-					end
+					local cah = ClickAndHold.new(button, 0.5)
+					cah.Holded.Event:Connect(function()
+						FUNCTIONSmodule.createFloatingButton(item, button, item["Args"][1])
+					end)
 		
 					
 				elseif item["Type"] == "ButtonGrid" then
@@ -6366,24 +6360,26 @@ local function tsbSequence(voidCF, label)
 	primeSkillKey()
 
 	local v2 = victimHRP(stT.target)
-	if not v2 then yextraNotify("Target lost") return end
+	if not v2 then yextraNotify("Target lost after prime") return end
 	local targetSaved = v2.CFrame
 
 	-- stick on victim so grab connects (server-side)
+	yextraNotify("Sticking to target for grab...")
 	local t0 = os.clock()
 	while os.clock() - t0 <= 1 do
-		if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
 		v2 = victimHRP(stT.target)
-		if not v2 then break end
+		if not v2 then yextraNotify("Target lost during stick") return end
 		me.CFrame = v2.CFrame
 		task.wait(0.1)
 	end
 
 	-- teleport OURSELVES to void; server grab drags victim with us
+	yextraNotify("Teleporting to void...")
 	me.CFrame = voidCF
 	task.wait(1)
 
 	-- return to start
+	yextraNotify("Returning to start...")
 	me.CFrame = saved
 	task.wait(1)
 
