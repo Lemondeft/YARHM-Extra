@@ -6536,6 +6536,44 @@ local function buildTSBModule()
 			end
 			yextraNotify(#found > 0 and table.concat(found, " | ") or "No numbered buttons found")
 		end,
+		Scan_Trashcans = function(_)
+			-- scan workspace for trashcans (case-insensitive name match)
+			local found = {}
+			for _, obj in ipairs(workspace:GetDescendants()) do
+				if obj:IsA("BasePart") and obj.Name:lower():find("trash") then
+					table.insert(found, obj)
+				end
+			end
+			if #found == 0 then yextraNotify("No trashcans found") return end
+			-- save to a simple global for teleport
+			getgenv().TSB_TRASHCANS = found
+			yextraNotify("Found " .. #found .. " trashcan(s). Use TP Nearest Trashcan.")
+		end,
+		TP_Nearest_Trashcan = function(_)
+			local cans = getgenv().TSB_TRASHCANS
+			if not cans or #cans == 0 then
+				yextraNotify("Run Scan Trashcans first")
+				return
+			end
+			local hrp = myHRP()
+			if not hrp then return end
+			local nearest, bestDist = nil, math.huge
+			for _, c in ipairs(cans) do
+				if c and c.Parent then
+					local d = (c.Position - hrp.Position).Magnitude
+					if d < bestDist then
+						bestDist = d
+						nearest = c
+					end
+				end
+			end
+			if nearest then
+				hrp.CFrame = nearest.CFrame + Vector3.new(0, 5, 0)
+				yextraNotify("Teleported to nearest trashcan (" .. math.floor(bestDist) .. " studs)")
+			else
+				yextraNotify("No valid trashcan found")
+			end
+		end,
 		TP_to_target = function(_)
 			local me = myHRP()
 			local v = victimHRP(stT.target or nearestPlayer(200))
