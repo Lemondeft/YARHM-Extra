@@ -2470,7 +2470,7 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 				
 				
 				local UserInputService = game:GetService("UserInputService")
-				if not fromload then
+				if not fromload and buttonname ~= "Select target (list)" then
 					YARHMPointSave:set(string.gsub(buttonname, "_", ""), udim2Serializer(UDim2.fromOffset(125, 90)) .. "|" .. udim2Serializer(UDim2.fromOffset(200,50)) .. "|true|true")
 				end
 		
@@ -2577,7 +2577,9 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 					floatingButtonDraggers[string.gsub(buttonname, "_", "")]:Enable()
 				end
 				floatingButtonDraggers[string.gsub(buttonname, "_", "")].Dragged = function(newPos)
-					YARHMPointSave:set(string.gsub(buttonname, "_", ""), udim2Serializer(newPos) .. "|" .. udim2Serializer(newFloatingButton.Size) .. "|" .. tostring(newFloatingButton.Visible) .. "|" .. tostring(floatingButtonDraggers[string.gsub(buttonname, "_", "")].CanBeDragged))
+					if buttonname ~= "Select target (list)" then
+						YARHMPointSave:set(string.gsub(buttonname, "_", ""), udim2Serializer(newPos) .. "|" .. udim2Serializer(newFloatingButton.Size) .. "|" .. tostring(newFloatingButton.Visible) .. "|" .. tostring(floatingButtonDraggers[string.gsub(buttonname, "_", "")].CanBeDragged))
+					end
 				end
 		
 				local holder = ClickAndHold.new(newFloatingButton)
@@ -2640,7 +2642,7 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 			repeat task.wait() until getgenv().Modules
 			for _, module in ipairs(getgenv().Modules) do
 				for _, item in ipairs(module) do
-					if item["Type"] == "Button" then
+					if item["Type"] == "Button" and item["Args"][1] ~= "Select target (list)" then
 						local key = string.gsub(item["Args"][1], "_", "")
 						local saved = YARHMPointSave:get(key)
 						if saved then
@@ -2760,10 +2762,12 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 						item["Args"][2](button)
 					end)
 					
-					local cah = ClickAndHold.new(button, 0.5)
-					cah.Holded.Event:Connect(function()
-						FUNCTIONSmodule.createFloatingButton(item, button, item["Args"][1])
-					end)
+					if item["Args"][1] ~= "Select target (list)" then
+						local cah = ClickAndHold.new(button, 0.5)
+						cah.Holded.Event:Connect(function()
+							FUNCTIONSmodule.createFloatingButton(item, button, item["Args"][1])
+						end)
+					end
 		
 					
 				elseif item["Type"] == "ButtonGrid" then
