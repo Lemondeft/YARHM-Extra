@@ -6255,17 +6255,31 @@ local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "
 
 local stT = {target = nil, charKey = "3", afk = nil, follow = false, ghost = false, m1T = 0}
 
-local function primeSkillKey()
+local function pressAbilityKey(hold)
+	hold = hold or 0.08
 	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
-	if type(keypress) == "function" then
+	local vk = Enum.KeyCode[k[2]]
+	local sent = false
+	-- 1) VirtualInputManager — what TSB actually processes in most executors
+	pcall(function()
+		VIM:SendKeyEvent(true, vk, false, game)
+		task.wait(hold)
+		VIM:SendKeyEvent(false, vk, false, game)
+		sent = true
+	end)
+	-- 2) executor keypress API
+	if not sent and type(keypress) == "function" then
 		pcall(keypress, k[1])
-	elseif VIM then
-		pcall(function()
-			VIM:SendKeyEvent(true, Enum.KeyCode[k[2]], false, game)
-			task.wait(0.03)
-			VIM:SendKeyEvent(false, Enum.KeyCode[k[2]], false, game)
-		end)
+		task.wait(hold)
+		if type(keyrelease) == "function" then pcall(keyrelease, k[1]) end
+		sent = true
 	end
+	return sent
+end
+
+local function primeSkillKey()
+	local sent = pressAbilityKey()
+	if not sent then yextraNotify("Ability key send failed (executor blocked VIM/keypress)") return end
 	-- give the grab/teleport ability a moment to attach the target
 	task.wait(0.3)
 end
@@ -6344,6 +6358,10 @@ local function buildTSBModule()
 		end,
 		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
+		Test_ability = function(_)
+			local sent = pressAbilityKey()
+			yextraNotify(sent and ("Ability key " .. stT.charKey .. " sent") or "Key send failed")
+		end,
 		TP_to_target = function(_)
 			local me = myHRP()
 			local v = victimHRP(stT.target or nearestPlayer(200))
