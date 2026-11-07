@@ -6031,11 +6031,35 @@ local function isAttacking(character)
 	return false
 end
 
-local stJ = {target = nil, follow = false, skills = false, block = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0}
+local function pickTarget()
+	local names, lookup = {}, {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LP then
+			table.insert(names, p.Name)
+			lookup[p.Name] = p
+		end
+	end
+	if #names == 0 then yextraNotify("No other players online") return end
+	local f = getgenv().YARHMFUNCTIONS
+	if not f or not f.dialog then yextraNotify("Hub UI not ready") return end
+	f.dialog("Select target", "Click a player", names)
+	local pick = f.waitfordialog()
+	f.closedialog()
+	return lookup[pick]
+end
+
+local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, dist = 3}
 
 local function buildJJSModule()
 	local module = {Name = "Jujutsu Shenanigans", gameId = 3808223175}
 	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>JJS</font> | YARHM Extra"}})
+	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(_)
+		local t = pickTarget()
+		if t then
+			stJ.target = t
+			yextraNotify("JJS target locked: " .. t.Name)
+		end
+	end}})
 	table.insert(module, {Type = "Input", Args = {"Player name...", "Lock", function(_, text)
 		local p = text ~= "" and resolveTarget(text) or nearestPlayer(200)
 		if p then
@@ -6060,6 +6084,9 @@ local function buildJJSModule()
 			stJ.blocking = false
 		end
 	end}})
+	table.insert(module, {Type = "Toggle", Args = {"Auto dodge (dash on enemy swing)", function(_, s) stJ.dodge = s end}})
+	table.insert(module, {Type = "Toggle", Args = {"Auto black flash", function(_, s) stJ.bf = s end}})
+	table.insert(module, {Type = "Range", Args = {"Follow distance (studs)", 3, 12, 1, function(_, val) stJ.dist = val end}})
 	table.insert(module, {Type = "Button", Args = {"Void kill target", function(_)
 		local t = stJ.target or nearestPlayer(60)
 		local v = victimHRP(t)
@@ -6097,8 +6124,8 @@ local function buildJJSModule()
 			end
 			local dist = (v.Position - me.Position).Magnitude
 			if stJ.follow then
-				-- teleport-follow: 3 studs in front of the victim, facing them
-				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 3, v.Position)
+				-- teleport-follow: stJ.dist studs in front of the victim, facing them
+				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * stJ.dist, v.Position)
 				if dist <= 13 and os.clock() - stJ.m1 >= 0.35 then
 					stJ.m1 = os.clock()
 					m1Click()
@@ -6111,15 +6138,31 @@ local function buildJJSModule()
 				face(v)
 				skillKey(seq:sub(stJ.i, stJ.i))
 			end
-			if stJ.block then
+			if stJ.bf and dist <= 8 and os.clock() - stJ.bfT >= 0.4 then
+				stJ.bfT = os.clock()
+				face(v)
+				m1Click()
+				skillKey("R")
+			end
+			if stJ.block or stJ.dodge then
 				local threat = nearestPlayer(25)
 				local attacking = threat and threat.Character and isAttacking(threat.Character)
-				if attacking and not stJ.blocking then
-					pcall(function() VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game) end)
-					stJ.blocking = true
-				elseif not attacking and stJ.blocking then
-					pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game) end)
-					stJ.blocking = false
+				if stJ.block then
+					if attacking and not stJ.blocking then
+						pcall(function() VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game) end)
+						stJ.blocking = true
+					elseif not attacking and stJ.blocking then
+						pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game) end)
+						stJ.blocking = false
+					end
+				end
+				if stJ.dodge and attacking and os.clock() - stJ.dodgeT >= 1 then
+					stJ.dodgeT = os.clock()
+					pcall(function()
+						VIM:SendKeyEvent(true, Enum.KeyCode.Q, false, game)
+						task.wait(0.05)
+						VIM:SendKeyEvent(false, Enum.KeyCode.Q, false, game)
+					end)
 				end
 			end
 		end
@@ -6143,7 +6186,7 @@ local TSB_TP = {
 }
 local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "Three"}, ["4"] = {0x34, "Four"}}
 
-local stT = {target = nil, charKey = "3", afk = nil}
+local stT = {target = nil, charKey = "3", afk = nil, follow = false, m1T = 0}
 
 local function primeSkillKey()
 	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
@@ -6185,6 +6228,13 @@ end
 local function buildTSBModule()
 	local module = {Name = "The Strongest Battlegrounds", gameId = 3808081382}
 	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>TSB</font> | YARHM Extra"}})
+	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(_)
+		local t = pickTarget()
+		if t then
+			stT.target = t
+			yextraNotify("TSB target locked: " .. t.Name)
+		end
+	end}})
 	table.insert(module, {Type = "Input", Args = {"Player name...", "Lock", function(_, text)
 		local p = text ~= "" and resolveTarget(text) or nearestPlayer(200)
 		if p then
@@ -6201,6 +6251,7 @@ local function buildTSBModule()
 			yextraNotify("Ability key: " .. c)
 		end
 	end}})
+	table.insert(module, {Type = "Toggle", Args = {"Follow + auto M1", function(_, s) stT.follow = s end}})
 	table.insert(module, {Type = "ButtonGrid", Toggleable = false, Args = {3, {
 		Bring = function(_)
 			local me = myHRP()
@@ -6220,6 +6271,13 @@ local function buildTSBModule()
 		end,
 		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
+		TP_to_target = function(_)
+			local me = myHRP()
+			local v = victimHRP(stT.target or nearestPlayer(200))
+			if not (me and v) then yextraNotify("No target") return end
+			me.CFrame = v.CFrame + v.CFrame.LookVector * -3
+			yextraNotify("Teleported to " .. (stT.target and stT.target.Name or "nearest"))
+		end,
 	}}})
 	table.insert(module, {Type = "ButtonGrid", Toggleable = false, Args = {3, {
 		Center = function(_) local me = myHRP() if me then me.CFrame = CFrame.new(TSB_TP.Center) end end,
@@ -6237,6 +6295,23 @@ local function buildTSBModule()
 			end)
 		end
 	end}})
+	module["BG_TASK"] = function()
+		while true do
+			task.wait(0.05)
+			if not stT.follow then continue end
+			local me = myHRP()
+			local v = victimHRP(stT.target or nearestPlayer(25))
+			if not (me and v) then continue end
+			local dist = (v.Position - me.Position).Magnitude
+			if dist > 3 then
+				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 3, v.Position)
+			end
+			if dist <= 13 and os.clock() - stT.m1T >= 0.35 then
+				stT.m1T = os.clock()
+				m1Click()
+			end
+		end
+	end
 	table.insert(getgenv().Modules, module)
 end
 
