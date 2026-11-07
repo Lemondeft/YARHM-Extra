@@ -6358,7 +6358,7 @@ local function tsbSequence(voidCF, label)
 	local v = victimHRP(stT.target)
 	if not (me and saved and v) then yextraNotify("Lock a target first") return end
 	primeSkillKey()
-	-- stick to the victim so the grab/teleport ability attaches
+	-- stick to the victim so the grab/teleport ability attaches (server moves them)
 	local t0 = os.clock()
 	while os.clock() - t0 <= 1 do
 		local v2 = victimHRP(stT.target)
@@ -6366,9 +6366,8 @@ local function tsbSequence(voidCF, label)
 		me.CFrame = v2.CFrame
 		task.wait(0.05)
 	end
-	-- you sit at the void spot (untouchable) while auto-skill keeps firing
-	-- until the victim dies; anchored + CFrame re-asserted each tick so the
-	-- void doesn't eat you too. No CFrame restore for the victim.
+	m1Click() -- cast the grab now that we're on them
+	-- sit at the void spot while the grab holds them; anchored so we don't die too
 	local wasAnchored = me.Anchored
 	me.Anchored = true
 	me.CFrame = voidCF
@@ -6378,16 +6377,15 @@ local function tsbSequence(voidCF, label)
 		local hum = stT.target and stT.target.Character and stT.target.Character:FindFirstChildOfClass("Humanoid")
 		if not hum or hum.Health <= 0 then break end
 		me.CFrame = voidCF
-		primeSkillKey()
+		task.wait(0.1)
 	end
-	-- return: re-fetch the HRP — if we died/respawned mid-sequence, `me` is
-	-- a destroyed part and teleporting it would silently no-op
+	-- return: re-fetch the HRP in case we respawned mid-sequence
 	local cur = myHRP()
 	if cur then
 		cur.Anchored = (cur == me) and wasAnchored or false
 		cur.CFrame = saved
 	end
-	yextraNotify(label .. " done")
+	yextraNotify(label .. " done — target dies only if the grab held them server-side")
 end
 
 local function buildTSBModule()
@@ -6424,6 +6422,8 @@ local function buildTSBModule()
 			local v = victimHRP(stT.target)
 			if not (me and saved and v) then yextraNotify("Lock a target first") return end
 			primeSkillKey()
+			-- stick close so the server's grab pulls them behind you; client
+			-- cannot set another player's CFrame (anti-cheat / network ownership)
 			local t0 = os.clock()
 			while os.clock() - t0 <= 1 do
 				local v2 = victimHRP(stT.target)
@@ -6431,8 +6431,9 @@ local function buildTSBModule()
 				me.CFrame = v2.CFrame + Vector3.new(0, 0.5, 0)
 				task.wait(0.02)
 			end
+			m1Click()
 			me.CFrame = saved
-			yextraNotify("Bring done")
+			yextraNotify("Bring cast — the game moves the target, not this script")
 		end,
 		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
