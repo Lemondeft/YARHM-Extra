@@ -13,6 +13,17 @@ if not game:IsLoaded() then
 	})
 	game.Loaded:Wait()
 end
+-- kill anything a previous execution left behind (stale UI incl. leaked
+-- overlays, old BG_TASK loops, anti-AFK connection)
+getgenv().YARHM_EXTRA_GEN = (getgenv().YARHM_EXTRA_GEN or 0) + 1
+if getgenv().YARHM then
+	pcall(function() getgenv().YARHM:Destroy() end)
+	getgenv().YARHM = nil
+end
+if getgenv().YARHM_EXTRA_AFK then
+	pcall(function() getgenv().YARHM_EXTRA_AFK:Disconnect() end)
+	getgenv().YARHM_EXTRA_AFK = nil
+end
 -- Instances:
 
 local Converted = {
@@ -6092,6 +6103,10 @@ local function expandPlayerList(anchor, onPick)
 	end
 end
 
+-- Loop teardown: capture the generation this run created; stale loops from a
+-- previous execution exit as soon as the counter no longer matches.
+local YGEN = getgenv().YARHM_EXTRA_GEN
+
 local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, ghost = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, ghostT = 0, dist = 3}
 
 local function buildJJSModule()
@@ -6153,6 +6168,7 @@ local function buildJJSModule()
 	module["BG_TASK"] = function()
 		while true do
 			task.wait(0.05)
+			if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
 			local me = myHRP()
 			local t = stJ.target or nearestPlayer(25)
 			local v = victimHRP(t)
@@ -6345,6 +6361,7 @@ local function buildTSBModule()
 	}}})
 	table.insert(module, {Type = "Toggle", Args = {"Anti-AFK", function(_, s)
 		if stT.afk then stT.afk:Disconnect() stT.afk = nil end
+		getgenv().YARHM_EXTRA_AFK = nil
 		if s then
 			stT.afk = LP.Idled:Connect(function()
 				pcall(function()
@@ -6352,11 +6369,13 @@ local function buildTSBModule()
 					VU:ClickButton2(Vector2.new())
 				end)
 			end)
+			getgenv().YARHM_EXTRA_AFK = stT.afk
 		end
 	end}})
 	module["BG_TASK"] = function()
 		while true do
 			task.wait(0.05)
+			if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
 			if not stT.follow then continue end
 			local me = myHRP()
 			local v = victimHRP(stT.target or nearestPlayer(25))
