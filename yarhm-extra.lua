@@ -6031,9 +6031,10 @@ local function isAttacking(character)
 	return false
 end
 
-local listFrame
+local listFrame, listCatcher
 local function closeList()
 	if listFrame then listFrame:Destroy() listFrame = nil end
+	if listCatcher then listCatcher:Destroy() listCatcher = nil end
 end
 
 -- expands a player list right under the clicked button
@@ -6048,14 +6049,14 @@ local function expandPlayerList(anchor, onPick)
 	if not gui then yextraNotify("Hub UI not ready") return end
 
 	-- click anywhere else to close
-	local catcher = Instance.new("TextButton")
-	catcher.Text = ""
-	catcher.BackgroundTransparency = 1
-	catcher.BorderSizePixel = 0
-	catcher.Size = UDim2.new(1, 0, 1, 0)
-	catcher.ZIndex = 999999998
-	catcher.Parent = gui
-	catcher.MouseButton1Click:Connect(closeList)
+	listCatcher = Instance.new("TextButton")
+	listCatcher.Text = ""
+	listCatcher.BackgroundTransparency = 1
+	listCatcher.BorderSizePixel = 0
+	listCatcher.Size = UDim2.new(1, 0, 1, 0)
+	listCatcher.ZIndex = 999999998
+	listCatcher.Parent = gui
+	listCatcher.MouseButton1Click:Connect(closeList)
 
 	listFrame = Instance.new("ScrollingFrame")
 	listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
