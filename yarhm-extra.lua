@@ -6298,17 +6298,27 @@ local function tsbSequence(voidCF, label)
 		me.CFrame = v2.CFrame
 		task.wait(0.05)
 	end
-	-- you sit at the void spot (untouchable) while auto-skill keeps
-	-- firing until the victim dies; no CFrame restore for the victim
+	-- you sit at the void spot (untouchable) while auto-skill keeps firing
+	-- until the victim dies; anchored + CFrame re-asserted each tick so the
+	-- void doesn't eat you too. No CFrame restore for the victim.
+	local wasAnchored = me.Anchored
+	me.Anchored = true
 	me.CFrame = voidCF
 	local t1 = os.clock()
 	while os.clock() - t1 <= 4 do
+		if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
 		local hum = stT.target and stT.target.Character and stT.target.Character:FindFirstChildOfClass("Humanoid")
 		if not hum or hum.Health <= 0 then break end
+		me.CFrame = voidCF
 		primeSkillKey()
-		task.wait(0.4)
 	end
-	me.CFrame = saved
+	-- return: re-fetch the HRP — if we died/respawned mid-sequence, `me` is
+	-- a destroyed part and teleporting it would silently no-op
+	local cur = myHRP()
+	if cur then
+		cur.Anchored = (cur == me) and wasAnchored or false
+		cur.CFrame = saved
+	end
 	yextraNotify(label .. " done")
 end
 
