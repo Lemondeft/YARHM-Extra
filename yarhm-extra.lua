@@ -6255,10 +6255,56 @@ local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "
 
 local stT = {target = nil, charKey = "3", afk = nil, follow = false, ghost = false, m1T = 0}
 
+local function tapAbilityButton()
+	-- touch devices: click the game's own ability slot button instead of
+	-- synthesizing keyboard input (keyboard events switch Roblox to PC UI
+	-- and hide the dash/punch buttons)
+	local pg = LP:FindFirstChildOfClass("PlayerGui")
+	if not pg then return false end
+	local slot = stT.charKey
+	local best
+	for _, d in ipairs(pg:GetDescendants()) do
+		if d:IsA("TextButton") or d:IsA("ImageButton") then
+			local label = d:IsA("TextButton") and d.Text or ""
+			if d.Name == slot or label == slot then
+				local pn = (d.Parent and d.Parent.Name or ""):lower()
+				if pn:find("hotbar") or pn:find("ability") or pn:find("skill") or pn:find("mobile") or pn:find("button") then
+					best = d
+					break
+				end
+				best = best or d
+			end
+		end
+	end
+	if not best then return false end
+	local fired = false
+	pcall(function()
+		if firesignal then
+			firesignal(best.MouseButton1Click)
+			fired = true
+		end
+	end)
+	if not fired then
+		pcall(function()
+			local a = best.AbsolutePosition + best.AbsoluteSize / 2
+			VU:Button1Down(a)
+			task.wait(0.05)
+			VU:Button1Up(a)
+			fired = true
+		end)
+	end
+	return fired
+end
+
 local function pressAbilityKey(hold)
 	hold = hold or 0.08
 	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
 	local vk = Enum.KeyCode[k[2]]
+	local uis = game:GetService("UserInputService")
+	if uis.TouchEnabled and not uis.KeyboardEnabled then
+		if tapAbilityButton() then return true end
+		-- fall through to key paths; they may hide the touch UI
+	end
 	local sent = false
 	-- 1) VirtualInputManager — what TSB actually processes in most executors
 	pcall(function()
