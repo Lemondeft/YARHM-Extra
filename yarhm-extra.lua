@@ -6266,7 +6266,9 @@ local function tapAbilityButton()
 	for _, d in ipairs(pg:GetDescendants()) do
 		if d:IsA("TextButton") or d:IsA("ImageButton") then
 			local label = d:IsA("TextButton") and d.Text or ""
-			if d.Name == slot or label == slot then
+			local nameOk = d.Name == slot or (d.Name:match("(%d+)$") == slot and #d.Name <= 10)
+			local textOk = label == slot
+			if nameOk or textOk then
 				local pn = (d.Parent and d.Parent.Name or ""):lower()
 				if pn:find("hotbar") or pn:find("ability") or pn:find("skill") or pn:find("mobile") or pn:find("button") then
 					best = d
@@ -6417,6 +6419,22 @@ local function buildTSBModule()
 		Test_ability = function(_)
 			local sent = pressAbilityKey()
 			yextraNotify(sent and ("Ability key " .. stT.charKey .. " sent") or "Key send failed")
+		end,
+		Dump_hotbar = function(_)
+			-- sends the names of candidate slot buttons so the path can be hardcoded
+			local pg = LP:FindFirstChildOfClass("PlayerGui")
+			if not pg then yextraNotify("No PlayerGui") return end
+			local found = {}
+			for _, d in ipairs(pg:GetDescendants()) do
+				if d:IsA("TextButton") or d:IsA("ImageButton") then
+					local label = d:IsA("TextButton") and d.Text or ""
+					if d.Name:match("%d") or label:match("%d") then
+						table.insert(found, d.Name .. (label ~= "" and "(" .. label .. ")" or ""))
+						if #found >= 8 then break end
+					end
+				end
+			end
+			yextraNotify(#found > 0 and table.concat(found, ", ") or "No numbered buttons found")
 		end,
 		TP_to_target = function(_)
 			local me = myHRP()
