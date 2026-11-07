@@ -6483,7 +6483,10 @@ local function buildTSBModule()
 			end
 			yextraNotify("Bring — no slot moved the target")
 		end,
-		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
+		Kill_Void = function(_)
+			yextraNotify("Kill_Void clicked, target: " .. (stT.target and stT.target.Name or "nil"))
+			tsbSequence(VOID_CF, "Void kill")
+		end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
 		Test_ability = function(_)
 			local before = stT.target
