@@ -4829,6 +4829,57 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 	--	end,}
 	--})
 	
+	-- ProximityPrompt Auto TP
+	local autoTPPrompt = false
+	local promptRange = 50
+	local promptConn
+	
+	table.insert(module, {
+		Type = "Text",
+		Args = {"ProximityPrompt"}
+	})
+	
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto TP to nearest ProximityPrompt", function(Self, state)
+			autoTPPrompt = state
+			if state then
+				promptConn = rs.Heartbeat:Connect(function()
+					if not autoTPPrompt then return end
+					local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+					if not hrp then return end
+					
+					local nearest, nearestDist = nil, promptRange
+					for _, obj in ipairs(workspace:GetDescendants()) do
+						if obj:IsA("ProximityPrompt") and obj.Enabled then
+							local part = obj.Parent
+							if part and part:IsA("BasePart") then
+								local dist = (part.Position - hrp.Position).Magnitude
+								if dist < nearestDist then
+									nearestDist = dist
+									nearest = part
+								end
+							end
+						end
+					end
+					
+					if nearest then
+						hrp.CFrame = nearest.CFrame + Vector3.new(0, 3, 0)
+					end
+				end)
+			else
+				if promptConn then promptConn:Disconnect() promptConn = nil end
+			end
+		end}
+	})
+	
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Prompt range (studs)", 10, 200, 10, function(Self, val)
+			promptRange = val
+		end}
+	})
+	
 	repeat task.wait() until getgenv().Modules
 	getgenv().Modules[1] = module
 end
