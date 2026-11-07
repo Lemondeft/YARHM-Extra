@@ -10,15 +10,27 @@ Upstream: <https://github.com/Joystickplays/psychic-octo-invention> (GPL-3.0)
 Removed:
 
 - Game modules: Forsaken, Murder Mystery 2, Flee the Facility, Brookhaven
-- `AdLoader` (downloaded and executed remote ads from `yarhm.com`)
-- ScriptBlox ingest telemetry at the end of the script
 
-Kept: the UI, floating buttons, config/PointSave, ESP indicator, fly utility,
-custom-module loader, and the Universal module.
+Kept & restored: the UI, floating buttons, config/PointSave, ESP indicator, fly
+utility, custom-module loader, and the Universal module, plus the **AdLoader**
+(ad campaign UI + click/impression reporting to `yarhm.com`) and the
+**ScriptBlox ingest** telemetry, restored verbatim from the original
+ScriptBlox distribution to respect the upstream author.
 
 Added: `EXTRA_GAMES` registry at the bottom of `yarhm-extra.lua`. It registers
 only the module matching the current `game.GameId`; Universal stays available
 everywhere. Outside the three games, Universal is the only entry in the list.
+
+Real game modules so far:
+
+| Module | Features |
+| --- | --- |
+| Jujutsu Shenanigans | target lock, follow + auto M1, auto skill rotation (Z/X/C/V/R), auto block (holds F on attack anims), void kill (damage remote if present, else sky lift) |
+| The Strongest Battlegrounds | target lock, ability key, Bring, Kill (void Y≈695), Skydive (void Y≈5631), arena teleports, anti-AFK |
+
+Mechanics ported from public scripts: L04728/JS-Lite + zyawalid-jpg/jjs-v3
+(JJS) and failur0/StrongestBattlegrounds (TSB). Blox Fruits remains a
+placeholder until features are written.
 
 ## Games
 
