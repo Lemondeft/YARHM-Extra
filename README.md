@@ -6,8 +6,8 @@ Scrapped the original game modules; adds its own:
 
 | Module | GameId | Features |
 | --- | --- | --- |
-| Jujutsu Shenanigans | 3808223175 | target picker (list), follow + auto M1, auto skills, auto dodge, auto black flash, auto block, follow-distance slider, void kill |
-| The Strongest Battlegrounds | 3808081382 | target picker (list), follow + auto M1, bring, kill (void), skydive, TP to target, arena TP, anti-AFK |
+| Jujutsu Shenanigans | 3808223175 | target picker (expanding list), follow + auto M1, auto skills, auto dodge, auto black flash, auto block, untargetable hop, auto void kill (skill loop) |
+| The Strongest Battlegrounds | 3808081382 | target picker (expanding list), follow + auto M1, untargetable hop, bring, kill (void, auto-skill), skydive, TP to target, arena TP, anti-AFK |
 | Blox Fruits | 994732206 | placeholder for now |
 
 ## Run

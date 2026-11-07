@@ -6031,34 +6031,76 @@ local function isAttacking(character)
 	return false
 end
 
-local function pickTarget()
-	local names, lookup = {}, {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LP then
-			table.insert(names, p.Name)
-			lookup[p.Name] = p
-		end
-	end
-	if #names == 0 then yextraNotify("No other players online") return end
-	local f = getgenv().YARHMFUNCTIONS
-	if not f or not f.dialog then yextraNotify("Hub UI not ready") return end
-	f.dialog("Select target", "Click a player", names)
-	local pick = f.waitfordialog()
-	f.closedialog()
-	return lookup[pick]
+local listFrame
+local function closeList()
+	if listFrame then listFrame:Destroy() listFrame = nil end
 end
 
-local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, dist = 3}
+-- expands a player list right under the clicked button
+local function expandPlayerList(anchor, onPick)
+	closeList()
+	local names = {}
+	for _, p in ipairs(Players:GetPlayers()) do
+		if p ~= LP then table.insert(names, p) end
+	end
+	if #names == 0 then yextraNotify("No other players online") return end
+	local gui = getgenv().YARHM
+	if not gui then yextraNotify("Hub UI not ready") return end
+
+	-- click anywhere else to close
+	local catcher = Instance.new("TextButton")
+	catcher.Text = ""
+	catcher.BackgroundTransparency = 1
+	catcher.BorderSizePixel = 0
+	catcher.Size = UDim2.new(1, 0, 1, 0)
+	catcher.ZIndex = 999999998
+	catcher.Parent = gui
+	catcher.MouseButton1Click:Connect(closeList)
+
+	listFrame = Instance.new("ScrollingFrame")
+	listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+	listFrame.BorderSizePixel = 0
+	listFrame.ScrollBarThickness = 4
+	listFrame.CanvasSize = UDim2.new(0, 0, 0, #names * 30)
+	listFrame.Size = UDim2.new(0, 200, 0, math.min(#names * 30 + 8, 240))
+	listFrame.ZIndex = 999999999
+	local pos = anchor.AbsolutePosition + Vector2.new(0, anchor.AbsoluteSize.Y + 4)
+	listFrame.Position = UDim2.fromOffset(pos.X, pos.Y)
+	listFrame.Parent = gui
+	Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 8)
+	local layout = Instance.new("UIListLayout", listFrame)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 4)
+
+	for i, p in ipairs(names) do
+		local b = Instance.new("TextButton")
+		b.Size = UDim2.new(1, -8, 0, 26)
+		b.BackgroundColor3 = Color3.fromRGB(49, 49, 49)
+		b.TextColor3 = Color3.fromRGB(255, 255, 255)
+		b.Font = Enum.Font.Gotham
+		b.TextSize = 14
+		b.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+		b.LayoutOrder = i
+		b.ZIndex = 999999999
+		b.Parent = listFrame
+		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+		b.MouseButton1Click:Connect(function()
+			closeList()
+			onPick(p)
+		end)
+	end
+end
+
+local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, ghost = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, ghostT = 0, dist = 3}
 
 local function buildJJSModule()
 	local module = {Name = "Jujutsu Shenanigans", gameId = 3808223175}
 	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>JJS</font> | YARHM Extra"}})
-	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(_)
-		local t = pickTarget()
-		if t then
-			stJ.target = t
-			yextraNotify("JJS target locked: " .. t.Name)
-		end
+	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(Self)
+		expandPlayerList(Self, function(p)
+			stJ.target = p
+			yextraNotify("JJS target locked: " .. p.Name)
+		end)
 	end}})
 	table.insert(module, {Type = "Input", Args = {"Player name...", "Lock", function(_, text)
 		local p = text ~= "" and resolveTarget(text) or nearestPlayer(200)
@@ -6087,27 +6129,25 @@ local function buildJJSModule()
 	table.insert(module, {Type = "Toggle", Args = {"Auto dodge (dash on enemy swing)", function(_, s) stJ.dodge = s end}})
 	table.insert(module, {Type = "Toggle", Args = {"Auto black flash", function(_, s) stJ.bf = s end}})
 	table.insert(module, {Type = "Range", Args = {"Follow distance (studs)", 3, 12, 1, function(_, val) stJ.dist = val end}})
-	table.insert(module, {Type = "Button", Args = {"Void kill target", function(_)
+	table.insert(module, {Type = "Toggle", Args = {"Untargetable (hop up between hits)", function(_, s) stJ.ghost = s end}})
+	table.insert(module, {Type = "Button", Args = {"Auto void kill (skill loop)", function(_)
 		local t = stJ.target or nearestPlayer(60)
-		local v = victimHRP(t)
-		if not v then yextraNotify("Lock a target first") return end
-		local me = myHRP()
-		if me then me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 4, v.Position) end
-		task.wait(0.1)
-		-- damage remote if the game still ships one, otherwise straight to the sky
-		local remote
-		for _, r in ipairs(ReplicatedStorage:GetDescendants()) do
-			if r:IsA("RemoteEvent") and r.Name:lower():find("damage") then remote = r break end
-		end
-		if remote and pcall(function() remote:FireServer({Target = t, Damage = 99999}) end) then
-			yextraNotify("Damage fired at " .. t.Name)
-		else
-			local vh = victimHRP(t)
-			if vh then
-				vh.CFrame = vh.CFrame + Vector3.new(0, 4500, 0)
-				yextraNotify(t.Name .. " lifted into the sky")
+		if not victimHRP(t) then yextraNotify("Lock a target first") return end
+		task.spawn(function()
+			local prev = {follow = stJ.follow, skills = stJ.skills, bf = stJ.bf, ghost = stJ.ghost}
+			stJ.follow, stJ.skills, stJ.bf, stJ.ghost, stJ.target = true, true, true, true, t
+			yextraNotify("Void kill loop on " .. t.Name)
+			local t0 = os.clock()
+			while os.clock() - t0 <= 15 do
+				local hum = t.Character and t.Character:FindFirstChildOfClass("Humanoid")
+				if not hum or hum.Health <= 0 then break end
+				task.wait(0.2)
 			end
-		end
+			local vh = victimHRP(t)
+			if vh then vh.CFrame = vh.CFrame + Vector3.new(0, 4500, 0) end
+			stJ.follow, stJ.skills, stJ.bf, stJ.ghost = prev.follow, prev.skills, prev.bf, prev.ghost
+			yextraNotify("Void kill finished")
+		end)
 	end}})
 	module["BG_TASK"] = function()
 		while true do
@@ -6123,7 +6163,19 @@ local function buildJJSModule()
 				continue
 			end
 			local dist = (v.Position - me.Position).Magnitude
-			if stJ.follow then
+			if stJ.follow and stJ.ghost then
+				-- hit-and-run: pop down onto the victim, burst, pop back out of reach
+				if os.clock() - stJ.ghostT >= 0.6 then
+					stJ.ghostT = os.clock()
+					me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * 3, v.Position)
+					m1Click()
+					local seq = stJ.keys:sub(1, #stJ.keys)
+					stJ.i = (stJ.i or 0) % math.max(#seq, 1) + 1
+					skillKey(seq:sub(stJ.i, stJ.i))
+					task.wait(0.15)
+					me.CFrame = CFrame.new(v.Position + Vector3.new(0, 150, 0))
+				end
+			elseif stJ.follow then
 				-- teleport-follow: stJ.dist studs in front of the victim, facing them
 				me.CFrame = CFrame.lookAt(v.Position + v.CFrame.LookVector * stJ.dist, v.Position)
 				if dist <= 13 and os.clock() - stJ.m1 >= 0.35 then
@@ -6186,7 +6238,7 @@ local TSB_TP = {
 }
 local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "Three"}, ["4"] = {0x34, "Four"}}
 
-local stT = {target = nil, charKey = "3", afk = nil, follow = false, m1T = 0}
+local stT = {target = nil, charKey = "3", afk = nil, follow = false, ghost = false, m1T = 0}
 
 local function primeSkillKey()
 	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
@@ -6208,8 +6260,8 @@ local function tsbSequence(voidCF, label)
 	local saved = me and me.CFrame
 	local v = victimHRP(stT.target)
 	if not (me and saved and v) then yextraNotify("Lock a target first") return end
-	local victimSaved = v.CFrame
 	primeSkillKey()
+	-- stick to the victim so the grab/teleport ability attaches
 	local t0 = os.clock()
 	while os.clock() - t0 <= 1 do
 		local v2 = victimHRP(stT.target)
@@ -6217,23 +6269,28 @@ local function tsbSequence(voidCF, label)
 		me.CFrame = v2.CFrame
 		task.wait(0.05)
 	end
+	-- you sit at the void spot (untouchable) while auto-skill keeps
+	-- firing until the victim dies; no CFrame restore for the victim
 	me.CFrame = voidCF
-	task.wait(1)
+	local t1 = os.clock()
+	while os.clock() - t1 <= 4 do
+		local hum = stT.target and stT.target.Character and stT.target.Character:FindFirstChildOfClass("Humanoid")
+		if not hum or hum.Health <= 0 then break end
+		primeSkillKey()
+		task.wait(0.4)
+	end
 	me.CFrame = saved
-	task.wait(1)
-	v.CFrame = victimSaved
 	yextraNotify(label .. " done")
 end
 
 local function buildTSBModule()
 	local module = {Name = "The Strongest Battlegrounds", gameId = 3808081382}
 	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>TSB</font> | YARHM Extra"}})
-	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(_)
-		local t = pickTarget()
-		if t then
-			stT.target = t
-			yextraNotify("TSB target locked: " .. t.Name)
-		end
+	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(Self)
+		expandPlayerList(Self, function(p)
+			stT.target = p
+			yextraNotify("TSB target locked: " .. p.Name)
+		end)
 	end}})
 	table.insert(module, {Type = "Input", Args = {"Player name...", "Lock", function(_, text)
 		local p = text ~= "" and resolveTarget(text) or nearestPlayer(200)
@@ -6252,6 +6309,7 @@ local function buildTSBModule()
 		end
 	end}})
 	table.insert(module, {Type = "Toggle", Args = {"Follow + auto M1", function(_, s) stT.follow = s end}})
+	table.insert(module, {Type = "Toggle", Args = {"Untargetable (hop up between hits)", function(_, s) stT.ghost = s end}})
 	table.insert(module, {Type = "ButtonGrid", Toggleable = false, Args = {3, {
 		Bring = function(_)
 			local me = myHRP()
@@ -6309,6 +6367,10 @@ local function buildTSBModule()
 			if dist <= 13 and os.clock() - stT.m1T >= 0.35 then
 				stT.m1T = os.clock()
 				m1Click()
+				if stT.ghost then
+					-- pop up out of reach after each hit
+					me.CFrame = CFrame.new(v.Position + Vector3.new(0, 150, 0))
+				end
 			end
 		end
 	end
