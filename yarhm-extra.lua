@@ -6049,7 +6049,8 @@ local function closeList()
 	if listFrame then listFrame:Destroy() listFrame = nil end
 end
 
--- expands a player list right under the clicked button
+-- expands a player list directly under the clicked button; high ZIndex so
+-- nothing blocks it, clicking empty space closes it
 local function expandPlayerList(anchor, onPick)
 	closeList()
 	local names = {}
@@ -6060,7 +6061,6 @@ local function expandPlayerList(anchor, onPick)
 	local gui = getgenv().YARHM
 	if not gui then yextraNotify("Hub UI not ready") return end
 
-	-- no screen-covering catcher; clicking empty space closes the list
 	inputConn = game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
 		if not gp and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
 			closeList()
@@ -6071,11 +6071,11 @@ local function expandPlayerList(anchor, onPick)
 	listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
 	listFrame.BorderSizePixel = 0
 	listFrame.ScrollBarThickness = 4
-	listFrame.CanvasSize = UDim2.new(0, 0, 0, #names * 30)
+	listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	listFrame.Size = UDim2.new(0, 200, 0, math.min(#names * 30 + 8, 240))
 	listFrame.ZIndex = 999999999
-	local pos = anchor.AbsolutePosition + Vector2.new(0, anchor.AbsoluteSize.Y + 4)
-	listFrame.Position = UDim2.fromOffset(pos.X, pos.Y)
+	local pos = anchor.AbsolutePosition + Vector2.new(0, anchor.AbsoluteSize.Y + 6)
+	listFrame.Position = UDim2.fromOffset(math.clamp(pos.X, 10, 1200), math.clamp(pos.Y, 10, 700))
 	listFrame.Parent = gui
 	Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 8)
 	local layout = Instance.new("UIListLayout", listFrame)
@@ -6374,36 +6374,30 @@ local function tsbSequence(voidCF, label)
 		end
 		m1Click() -- cast grab
 
-		-- sit at void spot while grab holds them; anchored so we don't die too
-		local wasAnchored = me.Anchored
-		me.Anchored = true
-		me.CFrame = voidCF
+		-- client cannot set another player's CFrame once and have it stick
+		-- (network ownership / anti-cheat), so rapid-fire it every frame:
+		-- some frames slip past the check and actually move the victim
 		local t1 = os.clock()
-		while os.clock() - t1 <= 4 do
+		while os.clock() - t1 <= 5 do
 			if getgenv().YARHM_EXTRA_GEN ~= YGEN then break end
-			local hum = stT.target and stT.target.Character and stT.target.Character:FindFirstChildOfClass("Humanoid")
+			local v2 = victimHRP(stT.target)
+			if not v2 then break end
+			local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
 			if not hum or hum.Health <= 0 then
-				-- killed them
 				local cur = myHRP()
-				if cur then
-					cur.Anchored = (cur == me) and wasAnchored or false
-					cur.CFrame = saved
-				end
+				if cur then cur.CFrame = saved end
 				yextraNotify(label .. " killed on slot " .. slot)
 				return
 			end
-			me.CFrame = voidCF
-			task.wait(0.1)
+			v2.CFrame = voidCF
+			task.wait()
 		end
-		-- this slot didn't kill; restore and try next
+		-- this slot didn't kill; restore ourselves and try next
 		local cur = myHRP()
-		if cur then
-			cur.Anchored = (cur == me) and wasAnchored or false
-			cur.CFrame = saved
-		end
+		if cur then cur.CFrame = saved end
 		task.wait(0.2)
 	end
-	yextraNotify(label .. " — no slot killed the target (grab may not connect on this character)")
+	yextraNotify(label .. " — no slot moved the target (anti-cheat blocked it)")
 end
 
 local function buildTSBModule()
@@ -6452,18 +6446,24 @@ local function buildTSBModule()
 					task.wait(0.04)
 				end
 				m1Click()
-				-- wait briefly to see if grab attached (target pulled close)
-				task.wait(0.5)
+				-- rapid-fire victim behind us; some frames may slip past anti-cheat
+				local behind = saved * CFrame.new(0, 0, -5)
+				local t1 = os.clock()
+				while os.clock() - t1 <= 2 do
+					if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
+					local v2 = victimHRP(stT.target)
+					if not v2 then break end
+					v2.CFrame = behind
+					task.wait()
+				end
 				local v2 = victimHRP(stT.target)
-				if v2 and (v2.Position - me.Position).Magnitude < 12 then
+				if v2 and (v2.Position - saved.Position).Magnitude < 15 then
 					yextraNotify("Bring grabbed on slot " .. slot)
-					me.CFrame = saved
 					return
 				end
 				task.wait(0.2)
 			end
-			me.CFrame = saved
-			yextraNotify("Bring — no slot grabbed the target")
+			yextraNotify("Bring — no slot moved the target")
 		end,
 		Kill_Void = function(_) tsbSequence(VOID_CF, "Void kill") end,
 		Skydive = function(_) tsbSequence(SKYDIVE_CF, "Skydive") end,
