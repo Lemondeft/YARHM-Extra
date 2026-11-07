@@ -6799,7 +6799,99 @@ local function buildTSBModule()
 			end)
 			getgenv().YARHM_EXTRA_AFK = stT.afk
 		end
-	end}})
+	end}}}})
+
+	-- No Dash Cooldown
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"No Dash Cooldown", function(_, s)
+			workspace:SetAttribute("NoDashCooldown", s)
+		end}
+	})
+	
+	-- No Fatigue
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"No Fatigue", function(_, s)
+			workspace:SetAttribute("NoFatigue", s)
+		end}
+	})
+	
+	-- Extra Emote Slots
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Extra Emote Slots", function(_, s)
+			LP:SetAttribute("ExtraSlots", s)
+		end}
+	})
+	
+	-- Emote Search Bar
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Emote Search Bar", function(_, s)
+			LP:SetAttribute("EmoteSearchBar", s)
+		end}
+	})
+	
+	-- Speed Boost
+	local tspeed = 0.1
+	local tpwalking = false
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Speed Boost", function(_, s)
+			tpwalking = s
+		end}
+	})
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Speed Multiplier", 0.1, 5, 0.1, function(_, val)
+			tspeed = val
+		end}
+	})
+	rs.Heartbeat:Connect(function()
+		if tpwalking then
+			local char = LP.Character
+			local hum = char and char:FindFirstChildOfClass("Humanoid")
+			local hrp = char and char:FindFirstChild("HumanoidRootPart")
+			if hum and hrp and hum.MoveDirection.Magnitude > 0 then
+				hrp.CFrame = hrp.CFrame + (hum.MoveDirection * tspeed)
+			end
+		end
+	end)
+	
+	-- Jump Boost
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Jump Boost", function(_, s)
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.UseJumpPower = not s end
+		end}
+	})
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Jump Power", 7.2, 500, 1, function(_, val)
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.JumpHeight = val end
+		end}
+	})
+	
+	-- Gravity
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Gravity", 0, 192.6, 1, function(_, val)
+			workspace.Gravity = val
+		end}
+	})
+	
+	-- FOV
+	table.insert(module, {
+		Type = "Range",
+		Args = {"FOV", 0, 120, 1, function(_, val)
+			local cam = workspace.CurrentCamera
+			if cam then cam.FieldOfView = val end
+		end}
+	})
+	
 	module["BG_TASK"] = function()
 		while true do
 			task.wait(0.05)
