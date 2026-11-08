@@ -6417,6 +6417,9 @@ end
 
 local function buildTSBModule()
 	local module = {Name = "The Strongest Battlegrounds", gameId = 3808081382}
+	local rs = game:GetService("RunService")
+	local ts = game:GetService("TweenService")
+	local uis = game:GetService("UserInputService")
 	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>TSB</font> | YARHM Extra"}})
 	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(Self)
 		expandPlayerList(Self, function(p)
