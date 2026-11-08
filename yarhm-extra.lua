@@ -6397,20 +6397,29 @@ local function tsbSequence(voidCF, label)
 		task.wait(0.1)
 	end
 
-	-- teleport OURSELVES to void; server grab drags victim with us
-	yextraNotify("Teleporting to void...")
-	me.CFrame = voidCF
-	task.wait(1)
+	m1Click() -- cast grab
 
-	-- return to start
-	yextraNotify("Returning to start...")
-	me.CFrame = saved
-	task.wait(1)
-
-	-- cleanup: move dead victim back to their start
-	v2 = victimHRP(stT.target)
-	if v2 then v2.CFrame = targetSaved end
-
+	-- Rapid-fire victim's CFrame to void coordinates; client-side victim CFrame
+	-- can slip past anti-cheat in bursts. This is what actually moves the victim.
+	local t1 = os.clock()
+	while os.clock() - t1 <= 4 do
+		if not isCurrent() then break end
+		v2 = victimHRP(stT.target)
+		if not v2 then break end
+		local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
+		if not hum or hum.Health <= 0 then
+			-- killed them
+			local cur = myHRP()
+			if cur then cur.CFrame = saved end
+			yextraNotify(label .. " killed on " .. stT.charKey)
+			return
+		end
+		v2.CFrame = voidCF
+		task.wait()
+	end
+	-- return ourselves
+	local cur = myHRP()
+	if cur then cur.CFrame = saved end
 	yextraNotify(label .. " done")
 end
 
@@ -6723,12 +6732,13 @@ local function buildTSBModule()
 							end
 						end
 					end
-					if nearest and bestDist < 10 then
-						hrp.CFrame = nearest.CFrame + Vector3.new(0, 3, 0)
-						task.wait(0.2)
-						m1Click()
+					if nearest and bestDist < 15 then
+						hrp.CFrame = nearest.CFrame + Vector3.new(0, 2, 0)
+						task.wait(0.15)
+						m1ClickMobile()
+						task.wait(1)
 					elseif nearest then
-						hrp.CFrame = nearest.CFrame + Vector3.new(0, 3, 0)
+						hrp.CFrame = nearest.CFrame + Vector3.new(0, 2, 0)
 					end
 				end)
 			else
@@ -7511,19 +7521,12 @@ local function EXTRA_routine()
 		if gidMatch or pidMatch then
 			matched = true
 			g.Build(g)
-			-- YARHM only auto-runs BG_TASK for custom modules; built-ins spawn here
 			local m = getgenv().Modules[#getgenv().Modules]
 			if m and m["BG_TASK"] then coroutine.wrap(m["BG_TASK"])() end
 			local modName = m and m.Name or g.Name or "Game"
 			yextraNotify(modName .. " module loaded! GameId: " .. game.GameId .. " | PlaceId: " .. game.PlaceId)
 		end
 	end
-	-- DEBUG: always print what game we're in
-	task.delay(0.5, function()
-		yextraNotify("DEBUG: game.GameId=" .. tostring(game.GameId) .. " game.PlaceId=" .. tostring(game.PlaceId))
-	end)
-	-- the hub builds the module list during Init; our insert may land after
-	-- that build (race), so rebuild it once the UI is up
 	task.delay(1, function()
 		local f = getgenv().YARHMFUNCTIONS
 		if f and f.refreshlist then pcall(f.refreshlist) end
