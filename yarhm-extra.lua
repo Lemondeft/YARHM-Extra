@@ -6397,29 +6397,24 @@ local function tsbSequence(voidCF, label)
 		task.wait(0.1)
 	end
 
-	m1Click() -- cast grab
+	-- cast grab
+	yextraNotify("Casting grab...")
+	m1Click()
 
-	-- Rapid-fire victim's CFrame to void coordinates; client-side victim CFrame
-	-- can slip past anti-cheat in bursts. This is what actually moves the victim.
-	local t1 = os.clock()
-	while os.clock() - t1 <= 4 do
-		if not isCurrent() then break end
-		v2 = victimHRP(stT.target)
-		if not v2 then break end
-		local hum = v2.Parent and v2.Parent:FindFirstChildOfClass("Humanoid")
-		if not hum or hum.Health <= 0 then
-			-- killed them
-			local cur = myHRP()
-			if cur then cur.CFrame = saved end
-			yextraNotify(label .. " killed on " .. stT.charKey)
-			return
-		end
-		v2.CFrame = voidCF
-		task.wait()
-	end
-	-- return ourselves
-	local cur = myHRP()
-	if cur then cur.CFrame = saved end
+	-- teleport OURSELVES to void; server-side grab drags victim with us
+	yextraNotify("Teleporting to void...")
+	me.CFrame = voidCF
+	task.wait(1)
+
+	-- return to start
+	yextraNotify("Returning to start...")
+	me.CFrame = saved
+	task.wait(1)
+
+	-- cleanup: move dead victim back to their start
+	v2 = victimHRP(stT.target)
+	if v2 then v2.CFrame = targetSaved end
+
 	yextraNotify(label .. " done")
 end
 
