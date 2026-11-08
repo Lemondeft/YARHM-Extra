@@ -6131,7 +6131,7 @@ local YGEN = getgenv().YARHM_EXTRA_GEN
 local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, ghost = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, ghostT = 0, dist = 3}
 
 local function buildJJSModule()
-	local module = {Name = "Jujutsu Shenanigans", gameId = 3808223175}
+	local module = {Name = "Jujutsu Shenanigans", gameId = 3508322461}
 	table.insert(module, {Type = "Text", Args = {"<font color='#FFFF00'>JJS</font> | YARHM Extra"}})
 	table.insert(module, {Type = "Button", Args = {"Select target (list)", function(Self)
 		expandPlayerList(Self, function(p)
@@ -6479,6 +6479,33 @@ local function buildTSBModule()
 				task.wait(0.2)
 			end
 			yextraNotify("Bring — no slot moved the target")
+		end,
+		Fling_Nearest = function(_)
+			local me = myHRP()
+			if not me then return end
+			local nearest, bestDist = nil, 60
+			for _, p in ipairs(Players:GetPlayers()) do
+				if p ~= LP and p.Character then
+					local v = p.Character:FindFirstChild("HumanoidRootPart")
+					if v then
+						local d = (v.Position - me.Position).Magnitude
+						if d < bestDist then
+							bestDist = d
+							nearest = p
+						end
+					end
+				end
+			end
+			if not nearest then yextraNotify("No players found") return end
+			local v = nearest.Character and nearest.Character:FindFirstChild("HumanoidRootPart")
+			if not v then yextraNotify("No valid target") return end
+			-- spin around nearest player to fling them
+			local spinConn = rs.Heartbeat:Connect(function()
+				me.CFrame = v.CFrame * CFrame.Angles(0, tick() * 60, 0) * CFrame.new(4, 0, 0)
+			end)
+			task.wait(2)
+			spinConn:Disconnect()
+			yextraNotify("Fling nearest done: " .. nearest.Name)
 		end,
 		Kill_Void = function(_)
 			yextraNotify("Kill_Void clicked, target: " .. (stT.target and stT.target.Name or "nil"))
@@ -7466,7 +7493,7 @@ local function buildPlaceholderModule(g)
 end
 
 local EXTRA_GAMES = {
-	{GameId = 3808223175, Build = buildJJSModule},
+	{Name = "Jujutsu Shenanigans", GameId = 3508322461, PlaceId = {9391468976, 17016840407}, Build = buildJJSModule},
 	{GameId = 3808081382, Build = buildTSBModule},
 	-- Blox Fruits ships once real features are in
 	{Name = "Blox Fruits", GameId = 994732206, Build = buildPlaceholderModule},
@@ -7476,14 +7503,16 @@ local function EXTRA_routine()
 	repeat task.wait() until getgenv().Modules
 	local matched = false
 	for _, g in ipairs(EXTRA_GAMES) do
-		if g.GameId == game.GameId then
+		local gidMatch = (g.GameId == game.GameId)
+		local pidMatch = g.PlaceId and table.find(g.PlaceId, game.PlaceId)
+		if gidMatch or pidMatch then
 			matched = true
 			g.Build(g)
 			-- YARHM only auto-runs BG_TASK for custom modules; built-ins spawn here
 			local m = getgenv().Modules[#getgenv().Modules]
 			if m and m["BG_TASK"] then coroutine.wrap(m["BG_TASK"])() end
-			local modName = m and m.Name or "Game"
-			yextraNotify(modName .. " module loaded! GameId: " .. game.GameId)
+			local modName = m and m.Name or g.Name or "Game"
+			yextraNotify(modName .. " module loaded! GameId: " .. game.GameId .. " | PlaceId: " .. game.PlaceId)
 		end
 	end
 	-- the hub builds the module list during Init; our insert may land after
