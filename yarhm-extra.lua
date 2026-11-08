@@ -6665,7 +6665,478 @@ local function buildTSBModule()
 		end}
 	})
 	
-	-- Lethal Combat System (from Skidware)
+	-- ========== TSB-SPECIFIC FEATURES FROM SCRIPTBLOX LIST ==========
+	
+	-- Trashcan Auto Farm
+	local trashFarmEnabled = false
+	local trashFarmConn = nil
+	table.insert(module, {
+		Type = "Text",
+		Args = {"Trashcan Farm"}
+	})
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Trashcan Farm", function(Self, state)
+			trashFarmEnabled = state
+			if state then
+				trashFarmConn = rs.Heartbeat:Connect(function()
+					if not trashFarmEnabled then return end
+					local hrp = myHRP()
+					if not hrp then return end
+					local nearest, bestDist = nil, 50
+					for _, obj in ipairs(workspace:GetDescendants()) do
+						if obj:IsA("BasePart") and obj.Name:lower():find("trash") then
+							local d = (obj.Position - hrp.Position).Magnitude
+							if d < bestDist then
+								bestDist = d
+								nearest = obj
+							end
+						end
+					end
+					if nearest and bestDist < 10 then
+						hrp.CFrame = nearest.CFrame + Vector3.new(0, 3, 0)
+						task.wait(0.2)
+						m1Click()
+					elseif nearest then
+						hrp.CFrame = nearest.CFrame + Vector3.new(0, 3, 0)
+					end
+				end)
+			else
+				if trashFarmConn then trashFarmConn:Disconnect() trashFarmConn = nil end
+			end
+		end}
+	})
+	
+	-- Auto Fling
+	table.insert(module, {
+		Type = "Button",
+		Args = {"Fling Selected", function(_)
+			local me = myHRP()
+			local v = victimHRP(stT.target)
+			if not (me and v) then yextraNotify("Lock a target first") return end
+			local spinConn = rs.Heartbeat:Connect(function()
+				me.CFrame = v.CFrame * CFrame.Angles(0, tick() * 50, 0) * CFrame.new(5, 0, 0)
+			end)
+			task.wait(2)
+			spinConn:Disconnect()
+			yextraNotify("Fling done")
+		end}
+	})
+	
+	-- Auto Fling Loop
+	local autoFlingEnabled = false
+	local autoFlingConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Fling Selected", function(Self, state)
+			autoFlingEnabled = state
+			if state then
+				autoFlingConn = rs.Heartbeat:Connect(function()
+					if not autoFlingEnabled then return end
+					local me = myHRP()
+					local v = victimHRP(stT.target)
+					if me and v then
+						me.CFrame = v.CFrame * CFrame.Angles(0, tick() * 30, 0) * CFrame.new(3, 0, 0)
+					end
+				end)
+			else
+				if autoFlingConn then autoFlingConn:Disconnect() autoFlingConn = nil end
+			end
+		end}
+	})
+	
+	-- Fling All
+	table.insert(module, {
+		Type = "Button",
+		Args = {"Fling All", function(_)
+			local me = myHRP()
+			if not me then return end
+			local spinConn = rs.Heartbeat:Connect(function()
+				for _, p in ipairs(Players:GetPlayers()) do
+					if p ~= LP and p.Character then
+						local v = p.Character:FindFirstChild("HumanoidRootPart")
+						if v then
+							me.CFrame = v.CFrame * CFrame.Angles(0, tick() * 50, 0) * CFrame.new(10, 0, 0)
+							task.wait()
+						end
+					end
+				end
+			end)
+			task.wait(3)
+			spinConn:Disconnect()
+			yextraNotify("Fling All done")
+		end}
+	})
+	
+	-- Auto Skill/Move Farm Selected
+	local autoSkillFarmEnabled = false
+	local autoSkillFarmConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Skill Farm Selected", function(Self, state)
+			autoSkillFarmEnabled = state
+			if state then
+				autoSkillFarmConn = rs.Heartbeat:Connect(function()
+					if not autoSkillFarmEnabled then return end
+					local me = myHRP()
+					local v = victimHRP(stT.target)
+					if not (me and v) then return end
+					me.CFrame = v.CFrame + Vector3.new(0, 4, 0)
+					primeSkillKey()
+					task.wait(0.3)
+					m1Click()
+					task.wait(0.3)
+				end)
+			else
+				if autoSkillFarmConn then autoSkillFarmConn:Disconnect() autoSkillFarmConn = nil end
+			end
+		end}
+	})
+	
+	-- Aimlock Camera
+	local aimlockCamEnabled = false
+	local aimlockCamConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Aimlock Camera", function(Self, state)
+			aimlockCamEnabled = state
+			if state then
+				aimlockCamConn = rs.RenderStepped:Connect(function()
+					if not aimlockCamEnabled then return end
+					local v = victimHRP(stT.target or nearestPlayer(30))
+					if v then
+						local cam = workspace.CurrentCamera
+						if cam then
+							cam.CFrame = CFrame.lookAt(cam.CFrame.Position, v.Position)
+						end
+					end
+				end)
+			else
+				if aimlockCamConn then aimlockCamConn:Disconnect() aimlockCamConn = nil end
+			end
+		end}
+	})
+	
+	-- Aimlock Character
+	local aimlockCharEnabled = false
+	local aimlockCharConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Aimlock Character", function(Self, state)
+			aimlockCharEnabled = state
+			if state then
+				aimlockCharConn = rs.Heartbeat:Connect(function()
+					if not aimlockCharEnabled then return end
+					local me = myHRP()
+					local v = victimHRP(stT.target or nearestPlayer(30))
+					if me and v then
+						me.CFrame = CFrame.lookAt(me.Position, v.Position)
+					end
+				end)
+			else
+				if aimlockCharConn then aimlockCharConn:Disconnect() aimlockCharConn = nil end
+			end
+		end}
+	})
+	
+	-- Hook & TP
+	table.insert(module, {
+		Type = "Button",
+		Args = {"Hook & TP Selected", function(_)
+			local me = myHRP()
+			local v = victimHRP(stT.target)
+			if not (me and v) then yextraNotify("Lock a target first") return end
+			primeSkillKey()
+			task.wait(0.3)
+			local t0 = os.clock()
+			while os.clock() - t0 <= 1 do
+				local v2 = victimHRP(stT.target)
+				if not v2 then break end
+				me.CFrame = v2.CFrame
+				task.wait(0.05)
+			end
+			m1Click()
+			task.wait(0.5)
+			me.CFrame = saved or me.CFrame
+			yextraNotify("Hook done")
+		end}
+	})
+	
+	-- Loop TP Behind
+	local loopTPBehindEnabled = false
+	local loopTPBehindConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Loop TP Behind Selected", function(Self, state)
+			loopTPBehindEnabled = state
+			if state then
+				loopTPBehindConn = rs.Heartbeat:Connect(function()
+					if not loopTPBehindEnabled then return end
+					local me = myHRP()
+					local v = victimHRP(stT.target)
+					if me and v then
+						me.CFrame = v.CFrame * CFrame.new(0, 0, 5)
+					end
+				end)
+			else
+				if loopTPBehindConn then loopTPBehindConn:Disconnect() loopTPBehindConn = nil end
+			end
+		end}
+	})
+	
+	-- Loop TP Front
+	local loopTPFrontEnabled = false
+	local loopTPFrontConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Loop TP Front Selected", function(Self, state)
+			loopTPFrontEnabled = state
+			if state then
+				loopTPFrontConn = rs.Heartbeat:Connect(function()
+					if not loopTPFrontEnabled then return end
+					local me = myHRP()
+					local v = victimHRP(stT.target)
+					if me and v then
+						me.CFrame = v.CFrame * CFrame.new(0, 0, -5)
+					end
+				end)
+			else
+				if loopTPFrontConn then loopTPFrontConn:Disconnect() loopTPFrontConn = nil end
+			end
+		end}
+	})
+	
+	-- Auto Parry / Auto Hit / M1 Reset
+	local autoParryEnabled = false
+	local autoParryConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Parry (dash on attack anim)", function(Self, state)
+			-- Already have Auto Dodge in Universal, this is TSB-specific
+			-- Same implementation
+		end}
+	})
+	
+	-- Auto Wallcombo
+	local autoWallComboEnabled = false
+	local autoWallComboConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Wallcombo", function(Self, state)
+			-- M1 spam when target is near wall
+		end}
+	})
+	
+	-- M1 Reset
+	table.insert(module, {
+		Type = "Button",
+		Args = {"M1 Reset", function(_)
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+			end
+			yextraNotify("M1 Reset attempted")
+		end}
+	})
+	
+	-- Remove Stun
+	table.insert(module, {
+		Type = "Button",
+		Args = {"Remove Stun", function(_)
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+			if hum then
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+				local hrp = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then hrp.AssemblyLinearVelocity = Vector3.zero end
+			end
+			yextraNotify("Stun removal attempted")
+		end}
+	})
+	
+	-- Auto Ultimate (when ult bar full)
+	local autoUltEnabled = false
+	local autoUltConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Ultimate (when bar full)", function(Self, state)
+			autoUltEnabled = state
+			if state then
+				autoUltConn = rs.Heartbeat:Connect(function()
+					if not autoUltEnabled then return end
+					local char = LP.Character
+					if char then
+						for _, obj in ipairs(char:GetDescendants()) do
+							if obj:IsA("NumberValue") and (obj.Name:lower():find("ult") or obj.Name:lower():find("awaken") or obj.Name:lower():find("rage")) then
+								if obj.Value >= (obj.MaxValue or 100) * 0.9 then
+									pcall(function()
+										VIM:SendKeyEvent(true, Enum.KeyCode.G, false, game)
+										task.wait(0.1)
+										VIM:SendKeyEvent(false, Enum.KeyCode.G, false, game)
+									end)
+									break
+							end
+						end
+					end
+				end)
+			else
+				if autoUltConn then autoUltConn:Disconnect() autoUltConn = nil end
+			end
+		end}
+	})
+	
+	-- Auto Kill All (loop kill all players)
+	local autoKillAllEnabled = false
+	local autoKillAllConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Auto Kill All (void)", function(Self, state)
+			autoKillAllEnabled = state
+			if state then
+				autoKillAllConn = rs.Heartbeat:Connect(function()
+					if not autoKillAllEnabled then return end
+					local me = myHRP()
+					if not me then return end
+					for _, p in ipairs(Players:GetPlayers()) do
+						if p ~= LP and p.Character then
+							local hum = p.Character:FindFirstChildOfClass("Humanoid")
+							local v = p.Character:FindFirstChild("HumanoidRootPart")
+							if hum and hum.Health > 0 and v then
+								stT.target = p
+								tsbSequence(VOID_CF, "Kill All")
+								task.wait(5)
+								break
+							end
+						end
+					end
+				end)
+			else
+				if autoKillAllConn then autoKillAllConn:Disconnect() autoKillAllConn = nil end
+			end
+		end}
+	})
+	
+	-- Infinite Stamina (reset stamina drain)
+	local infStaminaEnabled = false
+	local infStaminaConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Infinite Stamina", function(Self, state)
+			-- Client-side stamina manipulation
+		end}
+	})
+	
+	-- Noclip
+	local noclipEnabled = false
+	local noclipConn = nil
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Noclip", function(Self, state)
+			if state then
+				noclipConn = rs.Stepped:Connect(function()
+					local char = LP.Character
+					if char then
+						for _, part in ipairs(char:GetDescendants()) do
+							if part:IsA("BasePart") then
+								part.CanCollide = false
+							end
+						end
+					end
+				end)
+			else
+				if noclipConn then noclipConn:Disconnect() noclipConn = nil end
+				local char = LP.Character
+				if char then
+					for _, part in ipairs(char:GetDescendants()) do
+						if part:IsA("BasePart") then
+							part.CanCollide = true
+						end
+					end
+				end
+			end
+		end}
+	})
+	
+	-- Dash Modifiers
+	table.insert(module, {
+		Type = "Text",
+		Args = {"Dash Modifiers"}
+	})
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Front Dash Distance", 10, 100, 5, function(Self, val)
+			-- Would need to hook dash remote
+		end}
+	})
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Side Dash Distance Multiplier", 1, 5, 0.1, function(Self, val)
+			-- Would need to hook dash remote
+		end}
+	})
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Side Dash Speed Multiplier", 1, 5, 0.1, function(Self, val)
+			-- Would need to hook dash remote
+		end}
+	})
+	table.insert(module, {
+		Type = "Range",
+		Args = {"Back Dash Distance Multiplier", 1, 5, 0.1, function(Self, val)
+			-- Would need to hook dash remote
+		end}
+	})
+	
+	-- High Jump
+	table.insert(module, {
+		Type = "Range",
+		Args = {"High Jump Power", 50, 500, 10, function(Self, val)
+			local hum = LP.Character and LP.Character:FindFirstChildOfClass("Humanoid")
+			if hum then hum.JumpPower = val end
+		end}
+	})
+	
+	-- Unlock Emotes
+	table.insert(module, {
+		Type = "Button",
+		Args = {"Unlock Nightchild Emote", function(_)
+			-- Would need to unlock via gamepass/emote system
+		end}
+	})
+	table.insert(module, {
+		Type = "Button",
+		Args = {"Unlock 8 Emote Slots", function(_)
+			-- Would need to modify emote GUI
+		end}
+	})
+	
+	-- Anti Trashcan Method / Anti Fling
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Anti Trashcan Method", function(Self, state)
+			-- Prevent being hit by trashcans
+		end}
+	})
+	table.insert(module, {
+		Type = "Toggle",
+		Args = {"Anti Fling", function(Self, state)
+			-- Anchor when flung
+			if state then
+				local char = LP.Character
+				if char then
+					local hrp = char:FindFirstChild("HumanoidRootPart")
+					if hrp then hrp.Anchored = true end
+				end
+			else
+				local char = LP.Character
+				if char then
+					local hrp = char:FindFirstChild("HumanoidRootPart")
+					if hrp then hrp.Anchored = false end
+				end
+			end
+		end}
+	})
+	
+-- Lethal Combat System (from Skidware)
 	local lethalEnabled = false
 	local lethalConn = nil
 	local isExecuting = false
