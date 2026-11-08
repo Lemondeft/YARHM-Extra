@@ -6335,12 +6335,20 @@ local function tapAbilityButton()
 	return fired
 end
 
--- ARM: select the ability slot — PC: number key; mobile: tap the slot button
+-- ARM: select the ability slot — PC: number key; mobile: tap center screen to arm/cast
 local function armAbility(hold)
 	hold = hold or 0.08
 	local uis = game:GetService("UserInputService")
 	if uis.TouchEnabled and not uis.KeyboardEnabled then
-		return tapAbilityButton()
+		-- mobile: tap center screen to arm/cast ability; no keyboard events (hides touch UI)
+		pcall(function()
+			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
+			local center = Vector2.new(vp.X / 2, vp.Y / 2)
+			VU:Button1Down(center)
+			task.wait(hold)
+			VU:Button1Up(center)
+		end)
+		return true
 	end
 	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
 	local vk = Enum.KeyCode[k[2]]
@@ -6369,7 +6377,7 @@ local function primeSkillKey()
 		return
 	end
 	task.wait(0.15)
-	m1Click() -- cast: click on PC, tap anywhere on mobile
+	m1ClickMobile() -- cast: click on PC, tap anywhere on mobile
 	-- give the grab/teleport ability a moment to attach the target
 	task.wait(0.3)
 end
