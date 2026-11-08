@@ -6974,6 +6974,7 @@ local function buildTSBModule()
 										VIM:SendKeyEvent(false, Enum.KeyCode.G, false, game)
 									end)
 									break
+								end
 							end
 						end
 					end
@@ -7477,11 +7478,12 @@ local function EXTRA_routine()
 	for _, g in ipairs(EXTRA_GAMES) do
 		if g.GameId == game.GameId then
 			matched = true
-			g.Build()
+			g.Build(g)
 			-- YARHM only auto-runs BG_TASK for custom modules; built-ins spawn here
 			local m = getgenv().Modules[#getgenv().Modules]
 			if m and m["BG_TASK"] then coroutine.wrap(m["BG_TASK"])() end
-			yextraNotify("TSB module loaded! GameId: " .. game.GameId)
+			local modName = m and m.Name or "Game"
+			yextraNotify(modName .. " module loaded! GameId: " .. game.GameId)
 		end
 	end
 	-- the hub builds the module list during Init; our insert may land after
