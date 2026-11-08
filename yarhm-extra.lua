@@ -7515,6 +7515,10 @@ local function EXTRA_routine()
 			yextraNotify(modName .. " module loaded! GameId: " .. game.GameId .. " | PlaceId: " .. game.PlaceId)
 		end
 	end
+	-- DEBUG: always print what game we're in
+	task.delay(0.5, function()
+		yextraNotify("DEBUG: game.GameId=" .. tostring(game.GameId) .. " game.PlaceId=" .. tostring(game.PlaceId))
+	end)
 	-- the hub builds the module list during Init; our insert may land after
 	-- that build (race), so rebuild it once the UI is up
 	task.delay(1, function()
@@ -7523,7 +7527,7 @@ local function EXTRA_routine()
 	end)
 	if not matched then
 		task.delay(3, function()
-			yextraNotify("No module for GameId " .. tostring(game.GameId) .. " (PlaceId " .. game.PlaceId .. ")")
+			yextraNotify("No module match. GameId: " .. tostring(game.GameId) .. " PlaceId: " .. tostring(game.PlaceId))
 		end)
 	end
 end
