@@ -1,3 +1,4 @@
+```text
         ,     \    /      ,        
        / \    )\__/(     / \       
       /   \  (_\  /_)   /   \      
@@ -10,8 +11,9 @@
  |  /   V        ))       V   \  | 
  |/     `       //        '     \| 
  `              V                '
+```
 
-Fork of **YARHM 1.22** by Aetherion ([ScriptBlox](https://scriptblox.com/script/Universal-Script-YARHM-12403) · [upstream repo](https://github.com/Joystickplays/psychic-octo-invention)). Same hub, same GPL-3.0, ads and ScriptBlox telemetry kept to support the original authors.
+Fork of **YARHM** by Joystickplays ([ScriptBlox](https://scriptblox.com/script/Universal-Script-YARHM-12403) · [upstream repo](https://github.com/Joystickplays/psychic-octo-invention)). GPL-3.0,
 
 Scrapped the original game modules
 ## Run
