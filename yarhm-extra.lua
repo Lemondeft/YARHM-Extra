@@ -6037,6 +6037,25 @@ local function m1ClickMobile()
 	end)
 end
 
+-- cast: tap at the victim's screen position so the ability fires at them
+local function castAt(v)
+	pcall(function()
+		local cam = workspace.CurrentCamera
+		local pt = cam and cam:WorldToViewportPoint(v.Position)
+		local pos
+		if pt and pt.Z > 0 then
+			pos = Vector2.new(pt.X, pt.Y)
+		else
+			local vp = cam and cam.ViewportSize or Vector2.new(1920, 1080)
+			pos = Vector2.new(vp.X / 2, vp.Y / 2)
+		end
+		VU:CaptureController()
+		VU:Button1Down(pos)
+		task.wait(0.03)
+		VU:Button1Up(pos)
+	end)
+end
+
 local function faceMobile(victimHRPPart)
 	local me = myHRP()
 	if me then me.CFrame = CFrame.lookAt(me.Position, victimHRPPart.Position) end
@@ -6339,15 +6358,7 @@ end
 local function armAbility(hold)
 	hold = hold or 0.08
 	local uis = game:GetService("UserInputService")
-	if uis.TouchEnabled and not uis.KeyboardEnabled then
-		-- mobile: tap center screen to arm/cast ability; no keyboard events (hides touch UI)
-		pcall(function()
-			local vp = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-			local center = Vector2.new(vp.X / 2, vp.Y / 2)
-			VU:Button1Down(center)
-			task.wait(hold)
-			VU:Button1Up(center)
-		end)
+	if uis.TouchEnabled and not uis.KeyboardEnabled and tapAbilityButton() then
 		return true
 	end
 	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
@@ -6388,41 +6399,33 @@ local function tsbSequence(voidCF, label)
 	local v = victimHRP(stT.target)
 	if not (me and saved and v) then yextraNotify("Lock a target first") return end
 
-	-- reference flow: arm, stick on victim 1s, teleport to void, wait, return, restore victim
-	primeSkillKey()
+	-- tp to the victim first; staying on top gets our client network ownership
+	me.CFrame = CFrame.lookAt(v.Position + Vector3.new(0, 3, 0), v.Position)
+	task.wait(0.2)
+	if not armAbility() then yextraNotify("Ability arm failed") end
+	task.wait(0.15)
+	v = victimHRP(stT.target)
+	if not v then yextraNotify("Target lost") return end
+	castAt(v) -- cast the grab while in range
 
-	local v2 = victimHRP(stT.target)
-	if not v2 then yextraNotify("Target lost after prime") return end
-	local targetSaved = v2.CFrame
-
-	-- stick on victim so grab connects (server-side)
-	yextraNotify("Sticking to target for grab...")
+	-- hold grab window, then pin the victim at the fall point and drop in with them
 	local t0 = os.clock()
-	while os.clock() - t0 <= 1 do
-		v2 = victimHRP(stT.target)
-		if not v2 then yextraNotify("Target lost during stick") return end
-		me.CFrame = v2.CFrame
-		task.wait(0.1)
+	while os.clock() - t0 <= 4.5 do
+		if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
+		v = victimHRP(stT.target)
+		if not v then break end
+		local hum = v.Parent and v.Parent:FindFirstChildOfClass("Humanoid")
+		if hum and hum.Health <= 0 then break end
+		if os.clock() - t0 <= 1.5 then
+			me.CFrame = CFrame.lookAt(v.Position + Vector3.new(0, 3, 0), v.Position)
+		else
+			me.CFrame = voidCF + Vector3.new(0, 5, 0)
+			v.CFrame = voidCF
+		end
+		task.wait()
 	end
 
-	-- cast grab
-	yextraNotify("Casting grab...")
-	m1Click()
-
-	-- teleport OURSELVES to void; server-side grab drags victim with us
-	yextraNotify("Teleporting to void...")
-	me.CFrame = voidCF
-	task.wait(1)
-
-	-- return to start
-	yextraNotify("Returning to start...")
 	me.CFrame = saved
-	task.wait(1)
-
-	-- cleanup: move dead victim back to their start
-	v2 = victimHRP(stT.target)
-	if v2 then v2.CFrame = targetSaved end
-
 	yextraNotify(label .. " done")
 end
 
@@ -6466,7 +6469,7 @@ local function buildTSBModule()
 			-- try all slots until one grabs; stick on top of the victim
 			for slot = 1, 4 do
 				stT.charKey = tostring(slot)
-				primeSkillKey()
+				armAbility()
 				local t0 = os.clock()
 				while os.clock() - t0 <= 1 do
 					if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
@@ -6475,7 +6478,9 @@ local function buildTSBModule()
 					me.CFrame = CFrame.lookAt(v2.Position + Vector3.new(0, 4, 0), v2.Position)
 					task.wait(0.04)
 				end
-				m1Click()
+				local v2 = victimHRP(stT.target)
+				if not v2 then break end
+				castAt(v2)
 				-- rapid-fire victim behind us; some frames may slip past anti-cheat
 				local behind = saved * CFrame.new(0, 0, -5)
 				local t1 = os.clock()
@@ -6889,8 +6894,7 @@ local function buildTSBModule()
 			local me = myHRP()
 			local v = victimHRP(stT.target)
 			if not (me and v) then yextraNotify("Lock a target first") return end
-			primeSkillKey()
-			task.wait(0.3)
+			armAbility()
 			local t0 = os.clock()
 			while os.clock() - t0 <= 1 do
 				local v2 = victimHRP(stT.target)
@@ -6898,7 +6902,8 @@ local function buildTSBModule()
 				me.CFrame = v2.CFrame
 				task.wait(0.05)
 			end
-			m1Click()
+			local v2 = victimHRP(stT.target)
+			if v2 then castAt(v2) end
 			task.wait(0.5)
 			me.CFrame = saved or me.CFrame
 			yextraNotify("Hook done")
