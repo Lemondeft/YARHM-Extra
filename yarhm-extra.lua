@@ -6296,12 +6296,40 @@ local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "
 
 local stT = {target = nil, charKey = "3", afk = nil, follow = false, ghost = false, m1T = 0}
 
+local function tapGuiButton(b)
+	if not b then return false end
+	local fired = false
+	pcall(function()
+		if firesignal then
+			firesignal(b.MouseButton1Click)
+			fired = true
+		end
+	end)
+	if not fired then
+		pcall(function()
+			local a = b.AbsolutePosition + b.AbsoluteSize / 2
+			VU:Button1Down(a)
+			task.wait(0.05)
+			VU:Button1Up(a)
+			fired = true
+		end)
+	end
+	return fired
+end
+
 local function tapAbilityButton()
-	-- mobile arm: tap the game's own ability slot button (slot number may be
-	-- on the button itself or a child TextLabel)
+	local slot = stT.charKey
+	-- 1) ContextActionService touch buttons — exact handle instead of name guessing
+	local cas = game:GetService("ContextActionService")
+	if cas.GetButton then
+		for _, an in ipairs({slot, "Slot" .. slot, "Skill" .. slot, "Ability" .. slot}) do
+			local ok, b = pcall(cas.GetButton, cas, an)
+			if ok and b then return tapGuiButton(b) end
+		end
+	end
+	-- 2) the game's own slot button (slot number on the button or a child label)
 	local pg = LP:FindFirstChildOfClass("PlayerGui")
 	if not pg then return false end
-	local slot = stT.charKey
 	local best
 	for _, d in ipairs(pg:GetDescendants()) do
 		if d:IsA("TextButton") or d:IsA("ImageButton") then
@@ -6335,23 +6363,7 @@ local function tapAbilityButton()
 		end
 	end
 	if not best then return false end
-	local fired = false
-	pcall(function()
-		if firesignal then
-			firesignal(best.MouseButton1Click)
-			fired = true
-		end
-	end)
-	if not fired then
-		pcall(function()
-			local a = best.AbsolutePosition + best.AbsoluteSize / 2
-			VU:Button1Down(a)
-			task.wait(0.05)
-			VU:Button1Up(a)
-			fired = true
-		end)
-	end
-	return fired
+	return tapGuiButton(best)
 end
 
 -- ARM: select the ability slot — PC: number key; mobile: tap center screen to arm/cast
