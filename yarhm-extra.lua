@@ -1,7 +1,7 @@
 -- YARHM Extra 1.0 (fork of Yet Another Random Hub Menu 1.22 by Aetherion)
 -- GPL-3.0. Upstream: https://github.com/Joystickplays/psychic-octo-invention
--- Build Number: 42
--- Build Date: 2026-10-15T07:08:04Z
+-- Build Number: 43
+-- Build Date: 2026-11-13T12:30:47Z
 
 
 
@@ -13,9 +13,24 @@ if not game:IsLoaded() then
 	})
 	game.Loaded:Wait()
 end
+
 -- kill anything a previous execution left behind (stale UI incl. leaked
 -- overlays, old BG_TASK loops, anti-AFK connection)
 getgenv().YARHM_EXTRA_GEN = (getgenv().YARHM_EXTRA_GEN or 0) + 1
+if getgenv().YARHM_EXTRA_CONNS then
+	for _, conn in ipairs(getgenv().YARHM_EXTRA_CONNS) do
+		pcall(function() conn:Disconnect() end)
+	end
+end
+getgenv().YARHM_EXTRA_CONNS = {}
+
+local function trackConn(conn)
+	if conn then
+		table.insert(getgenv().YARHM_EXTRA_CONNS, conn)
+	end
+	return conn
+end
+
 if getgenv().YARHM then
 	pcall(function() getgenv().YARHM:Destroy() end)
 	getgenv().YARHM = nil
@@ -23,6 +38,8 @@ end
 if getgenv().YARHM_EXTRA_AFK then
 	pcall(function() getgenv().YARHM_EXTRA_AFK:Disconnect() end)
 	getgenv().YARHM_EXTRA_AFK = nil
+end
+
 end
 -- Instances:
 
@@ -1413,6 +1430,7 @@ Converted["_Ad"].Interactable = false
 Converted["_Ad"].Position = UDim2.new(0.657790542, 0, 0.99626863, 0)
 Converted["_Ad"].Size = UDim2.new(0.680272102, 0, 0.779850721, 0)
 Converted["_Ad"].Name = "Ad"
+Converted["_Ad"].Visible = false
 Converted["_Ad"].Parent = Converted["_Menu"]
 
 Converted["_UICorner26"].BottomLeftRadius = UDim.new(0, 0)
@@ -2264,7 +2282,7 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 				notif.Visible = true
 				notif.Name = s
 		
-				if color and typeof(icon) == "Color3" then
+				if color and typeof(color) == "Color3" then
 					notif.UIStroke.Color = color
 					notif.ImageLabel.ImageColor3 = color
 				end
@@ -2539,8 +2557,9 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 						end)
 					end
 				end
-				UserInputService.InputEnded:Connect(function(input)
-					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then 
+				local fbKey = string.gsub(buttonname, "_", "")
+				floatingButtonConnections[fbKey .. "_ripple"] = UserInputService.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						closeRipple()
 					end
 				end)
@@ -2619,9 +2638,14 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 				end
 		
 			else
-				floatingButtonKeybinds[string.gsub(buttonname, "_", "")] = nil
-				if floatingButtonConnections[string.gsub(buttonname, "_", "")] then
-					floatingButtonConnections[string.gsub(buttonname, "_", "")]:Disconnect()
+				local fbKey = string.gsub(buttonname, "_", "")
+				floatingButtonKeybinds[fbKey] = nil
+				floatingButtonDraggers[fbKey] = nil
+				for _, connKey in ipairs({fbKey, fbKey .. "_ripple"}) do
+					if floatingButtonConnections[connKey] then
+						floatingButtonConnections[connKey]:Disconnect()
+						floatingButtonConnections[connKey] = nil
+					end
 				end
 				YARHMPointSave:remove(string.gsub(buttonname, "_", ""))
 				task.spawn(function()
@@ -2675,21 +2699,7 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 		
 			AREA:ClearAllChildren()
 			
-			if not adState then
-				adState = true
-				ts:Create(script.Parent.Menu.Ad, TweenInfo.new(1, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
-					AnchorPoint = Vector2.new(1,0),
-					Position = UDim2.fromScale(1,0),
-					Size = UDim2.new(0.68, 0, 0.18, 0)
-				}):Play()
-				
-				ts:Create(script.Parent.Menu.Ad.UICorner, TweenInfo.new(1, Enum.EasingStyle.Cubic, Enum.EasingDirection.InOut), {
-					BottomLeftRadius = UDim.new(0, 8),
-					BottomRightRadius = UDim.new(0, 0),
-					TopLeftRadius = UDim.new(0, 0),
-					TopRightRadius = UDim.new(0, 16)
-				}):Play()
-			end
+			adState = true
 			
 			
 			local listlayout = Instance.new("UIListLayout")
@@ -2943,90 +2953,113 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 							end)
 						end
 					end)
-				elseif item["Type"] == "Range" then
-					local clonerange = getgenv().YARHM.Range:Clone()
-					clonerange.Parent = frameHolder
-					clonerange.Visible = true
-		
-					clonerange.TextLabel.Text = item["Args"][1]
-					clonerange.TextLabel.TextColor3 = FUNCTIONSmodule.getTheme().textColor
-					clonerange.TextLabel.Font = Enum.Font.Montserrat
-					
-					clonerange.Frame.Track.Ball.BackgroundColor3 = FUNCTIONSmodule.getTheme().accentColor
-					clonerange.Frame.Track.BackgroundColor3 = FUNCTIONSmodule.getTheme().secondaryColor
-					
-					if not rangeValueStates[item["Args"][1] .. module.Name] then
-						rangeValueStates[item["Args"][1] .. module.Name] = item["Args"][2]
+elseif item["Type"] == "Range" then
+
+				local clonerange = getgenv().YARHM.Range:Clone()
+				clonerange.Parent = frameHolder
+				clonerange.Visible = true
+
+				local labelText = item["Args"][1]
+				local minVal    = tonumber(item["Args"][2]) or 0
+				local maxVal    = tonumber(item["Args"][3]) or 100
+				local stepVal   = tonumber(item["Args"][4]) or 1
+				local callback  = item["Args"][5]
+				local stateKey  = labelText .. module.Name
+
+				local stepStr = tostring(stepVal)
+				local dotIdx = stepStr:find("%.")
+				local decimals = dotIdx and (#stepStr - dotIdx) or 0
+
+				clonerange.TextLabel.Text = labelText
+				clonerange.TextLabel.TextColor3 = FUNCTIONSmodule.getTheme().textColor
+				clonerange.TextLabel.Font = Enum.Font.Montserrat
+
+				local track = clonerange.Frame.Track
+				local ball = track.Ball
+				ball.BackgroundColor3 = FUNCTIONSmodule.getTheme().accentColor
+				track.BackgroundColor3 = FUNCTIONSmodule.getTheme().secondaryColor
+
+				if rangeValueStates[stateKey] == nil then
+					rangeValueStates[stateKey] = minVal
+				end
+
+				local function getAlpha(val)
+					if maxVal <= minVal then return 0 end
+					return math.clamp((val - minVal) / (maxVal - minVal), 0, 1)
+				end
+
+				ball.Size = UDim2.new(lrp(0.06, 1, getAlpha(rangeValueStates[stateKey])), 0, 1, 0)
+
+				local slider = DraggableObject.new(clonerange.Frame, nil, false, true)
+				slider:Enable()
+
+				local dragStartPos = nil
+				local dragStartVal = nil
+
+				slider.DragStarted = function()
+					dragStartPos = nil
+					dragStartVal = rangeValueStates[stateKey]
+				end
+
+				slider.Dragged = function(pos)
+					if not dragStartPos then
+						dragStartPos = pos
+						dragStartVal = rangeValueStates[stateKey]
 					end
-					clonerange.Frame.Track.Ball.Size = UDim2.new(lrp(0.06, 1, rangeValueStates[item["Args"][1] .. module.Name] / item["Args"][3]), 0, 1, 0)
-		
-					local slider = DraggableObject.new(clonerange.Frame, nil, false, true)
-					slider:Enable()
-					
-					local relativeSlide = nil
-					slider.Dragged = function(pos: UDim2)
-						if not relativeSlide then relativeSlide = pos end
-						local dragDistance = pos - relativeSlide
-						
-						local resolvedVal = rangeValueStates[item["Args"][1] .. module.Name]
-						local deltaChange = dragDistance.X.Offset
-						if math.abs(deltaChange) * 2 > item["Args"][4] then
-							resolvedVal = math.clamp(resolvedVal + deltaChange, 0, item["Args"][3])
-							relativeSlide = pos
-							
-							if item["Args"][4] > 1 then
-								resolvedVal = math.round(resolvedVal)
-							end
-							
-							rangeValueStates[item["Args"][1] .. module.Name] = resolvedVal
-						end
-						
-						clonerange.Frame.Track.Ball.Size = UDim2.new(lrp(0.06, 1, resolvedVal / item["Args"][3]), 0, 1, 0)
-		
-						
-						
-						clonerange.Frame.Track.Ball.BallProgress.Text = roundNumber(resolvedVal, 2)
-						clonerange.Frame.Track.TrackProgress.Text = tostring(resolvedVal, 2)
-						if resolvedVal > item["Args"][3] / 2 then
-							ts:Create(clonerange.Frame.Track.Ball.BallProgress, TweenInfo.new(0.2), {
-								TextTransparency = 0,
-								TextStrokeTransparency = 0
-							}):Play()
-							ts:Create(clonerange.Frame.Track.TrackProgress, TweenInfo.new(0.2), {
-								TextTransparency = 1,
-								TextStrokeTransparency = 1
-							}):Play()
-						else
-							ts:Create(clonerange.Frame.Track.Ball.BallProgress, TweenInfo.new(0.2), {
-								TextTransparency = 1,
-								TextStrokeTransparency = 1
-							}):Play()
-							ts:Create(clonerange.Frame.Track.TrackProgress, TweenInfo.new(0.2), {
-								TextTransparency = 0,
-								TextStrokeTransparency = 0
-							}):Play()
-						end
-						
-						rangeValueStates[item["Args"][1] .. module.Name] = resolvedVal
-						
-						if item["Args"][5] then
-							item["Args"][5](clonerange, resolvedVal)
-						end
-					end
-					
-					slider.DragEnded = function()
-						relativeSlide = nil
-						ts:Create(clonerange.Frame.Track.Ball.BallProgress, TweenInfo.new(0.2), {
+
+					local trackWidth = math.max(track.AbsoluteSize.X, 100)
+					local deltaPx = pos.X.Offset - dragStartPos.X.Offset
+					local rawVal = dragStartVal + (deltaPx / trackWidth) * (maxVal - minVal)
+
+					local snapped = minVal + math.round((rawVal - minVal) / stepVal) * stepVal
+					local resolvedVal = roundNumber(math.clamp(snapped, minVal, maxVal), decimals)
+
+					rangeValueStates[stateKey] = resolvedVal
+
+					local alpha = getAlpha(resolvedVal)
+					ball.Size = UDim2.new(lrp(0.06, 1, alpha), 0, 1, 0)
+
+					local displayStr = tostring(resolvedVal)
+					ball.BallProgress.Text = displayStr
+					track.TrackProgress.Text = displayStr
+
+					if alpha > 0.5 then
+						ts:Create(ball.BallProgress, TweenInfo.new(0.2), {
+							TextTransparency = 0,
+							TextStrokeTransparency = 0
+						}):Play()
+						ts:Create(track.TrackProgress, TweenInfo.new(0.2), {
 							TextTransparency = 1,
 							TextStrokeTransparency = 1
 						}):Play()
-						ts:Create(clonerange.Frame.Track.TrackProgress, TweenInfo.new(0.2), {
+					else
+						ts:Create(ball.BallProgress, TweenInfo.new(0.2), {
 							TextTransparency = 1,
 							TextStrokeTransparency = 1
 						}):Play()
+						ts:Create(track.TrackProgress, TweenInfo.new(0.2), {
+							TextTransparency = 0,
+							TextStrokeTransparency = 0
+						}):Play()
 					end
-		
-						
+
+					if callback then
+						callback(clonerange, resolvedVal)
+					end
+				end
+
+				slider.DragEnded = function()
+					dragStartPos = nil
+					ts:Create(ball.BallProgress, TweenInfo.new(0.2), {
+						TextTransparency = 1,
+						TextStrokeTransparency = 1
+					}):Play()
+					ts:Create(track.TrackProgress, TweenInfo.new(0.2), {
+						TextTransparency = 1,
+						TextStrokeTransparency = 1
+					}):Play()
+				end
+
 				end
 				
 		
@@ -3314,6 +3347,7 @@ do -- Routine Module: StarterGui.YARHM.Theme
 		local themeObjects = {
 			font = {},
 			textColor = {},
+			accentColor = {},
 			primaryColor = {},
 			secondaryColor = {},
 			backgroundColorCSQ = {},
@@ -3334,6 +3368,8 @@ do -- Routine Module: StarterGui.YARHM.Theme
 						for _, find in ipairs(obj:GetChildren()) do
 							if find:IsA("UIGradient") then table.insert(themeObjects.backgroundColorCSQ, find) break end
 						end
+					elseif obj:FindFirstChild("themedColor").Value == "accentColor" then
+						table.insert(themeObjects.accentColor, obj)
 					else
 						warn("FRAME unknown obj: "..obj.Name)
 					end
@@ -3405,13 +3441,17 @@ do -- Routine Module: StarterGui.YARHM.Theme
 				end
 			elseif colorType == "primaryColor" then
 				for _, obj in next, themeObjects.primaryColor do
-					local s=pcall(function() obj.Color = newColor end) if s then return end
-					obj.BackgroundColor3 = newColor
+					local ok = pcall(function() obj.Color = newColor end)
+					if not ok then
+						obj.BackgroundColor3 = newColor
+					end
 				end
 			elseif colorType == "secondaryColor" then
 				for _, obj in next, themeObjects.secondaryColor do
-					local s=pcall(function() obj.Color = newColor end) if s then return end
-					obj.BackgroundColor3 = newColor
+					local ok = pcall(function() obj.Color = newColor end)
+					if not ok then
+						obj.BackgroundColor3 = newColor
+					end
 				end
 			elseif colorType == "backgroundColorCSQ" then
 				for _, obj in next, themeObjects.backgroundColorCSQ do
@@ -3742,6 +3782,7 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 	
 	local infJump = false
 	local infJumpConnection = nil
+	local infJumpCharConn = nil
 	local landedConnection = nil
 	
 	local infJumps = 0
@@ -3781,6 +3822,12 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 				if char and char:FindFirstChildWhichIsA("Humanoid") then
 					setupHumanoid(char:FindFirstChildWhichIsA("Humanoid"))
 				end
+			if infJumpCharConn then infJumpCharConn:Disconnect() infJumpCharConn = nil end
+			infJumpCharConn = trackConn(game.Players.LocalPlayer.CharacterAdded:Connect(function(char)
+				if not infJump then return end
+				local hum = char:WaitForChild("Humanoid", 5)
+				if hum then setupHumanoid(hum) end
+			end))
 	
 				infJumpConnection = uis.JumpRequest:Connect(function()
 					local character = game.Players.LocalPlayer.Character
@@ -3805,6 +3852,7 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 					end
 				end)
 			else
+			if infJumpCharConn then infJumpCharConn:Disconnect() infJumpCharConn = nil end
 				if infJumpConnection then infJumpConnection:Disconnect() end
 				if landedConnection then landedConnection:Disconnect() end
 				infJumps = 0
@@ -4031,8 +4079,15 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 	end
 	
 	
+
+	local function findPlayerByQuery(query)
+		if not query or query == "" then return nil end
+		local matchName = getPlayer(query, Players.LocalPlayer)
+		return matchName and Players:FindFirstChild(matchName) or nil
+	end
+
 	local function gotoPlayer(targetPlayerName)
-		local targetPlayer = Players:FindFirstChild(getPlayer(targetPlayerName, game.Players.LocalPlayer))
+		local targetPlayer = findPlayerByQuery(targetPlayerName)
 		if targetPlayer then
 			local character = targetPlayer.Character
 			if character and character:FindFirstChild("HumanoidRootPart") then
@@ -4043,9 +4098,10 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 				end
 			end
 		else
-			print("Player '" .. targetPlayerName .. "' not found.")
+			fu.notification("Player '" .. tostring(targetPlayerName) .. "' not found.")
 		end
 	end
+
 	
 	table.insert(module, {
 		Type = "Input",
@@ -4058,72 +4114,78 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 		}
 	})
 	
-	local spectateLoop = nil
+
+	local spectating = false
 	table.insert(module, {
 		Type = "Button",
 		Args = {"Spectate players", function(Self)
-			local listofplayers = game.Players:GetPlayers()
+			if spectating then return end
+			local listofplayers = Players:GetPlayers()
 			local currentlyViewing = 1
-			local currentPlayer = listofplayers[currentlyViewing]
-			if not currentPlayer then return end
-			workspace.CurrentCamera.CameraSubject = currentPlayer.Character.Humanoid
-			spectateLoop = task.spawn(function()
-				while true do
-					fu.dialog("Spectating...", "Now spectating: " .. workspace.CurrentCamera.CameraSubject.Parent.Name, {"Previous", "Stop", "Next"})
+
+			local function setSpectateSubject(idx)
+				local p = listofplayers[idx]
+				local hum = p and p.Character and p.Character:FindFirstChildOfClass("Humanoid")
+				if hum then
+					workspace.CurrentCamera.CameraSubject = hum
+					return p.Name
+				end
+				return p and p.Name or "Unknown"
+			end
+
+			spectating = true
+			task.spawn(function()
+				while spectating do
+					listofplayers = Players:GetPlayers()
+					if #listofplayers == 0 then break end
+					currentlyViewing = math.clamp(currentlyViewing, 1, #listofplayers)
+					local subjectName = setSpectateSubject(currentlyViewing)
+
+					fu.dialog("Spectating...", "Now spectating: " .. subjectName, {"Previous", "Stop", "Next"})
 					local action = fu.waitfordialog()
 					if action == "Stop" then
 						fu.closedialog()
-						workspace.CurrentCamera.CameraSubject = game.Players.LocalPlayer.Character.Humanoid
-						task.cancel(spectateLoop)
+						local myHum = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+						if myHum then workspace.CurrentCamera.CameraSubject = myHum end
+						spectating = false
 						break
 					elseif action == "Next" then
-						currentlyViewing = currentlyViewing + 1
-						if currentlyViewing > #listofplayers then
-							currentlyViewing = 1
-						end
-						currentPlayer = listofplayers[currentlyViewing]
-						if not currentPlayer then return end
-						workspace.CurrentCamera.CameraSubject = currentPlayer.Character.Humanoid
+						currentlyViewing = (currentlyViewing % #listofplayers) + 1
 					elseif action == "Previous" then
-						currentlyViewing = currentlyViewing - 1
-						if currentlyViewing < 1 then
-							currentlyViewing = #listofplayers
-						end
-						currentPlayer = listofplayers[currentlyViewing]
-						if not currentPlayer then return end
-						workspace.CurrentCamera.CameraSubject = currentPlayer.Character.Humanoid
+						currentlyViewing = ((currentlyViewing - 2) % #listofplayers) + 1
 					end
 				end
-	
+				spectating = false
 			end)
-		end,}
+		end}
 	})
-	
+
 	table.insert(module, {
 		Type = "Text",
 		Args = {""}
 	})
-	
+
 	table.insert(module, {
 		Type = "Text",
 		Args = {"Aim locking"}
 	})
-	
+
 	local aimlockrscon
 	local target
-	
+
 	table.insert(module, {
 		Type = "Input",
 		Args = {"Target player", "Set target", function(Self, input)
-			if not Players:FindFirstChild(getPlayer(input, game.Players.LocalPlayer)) then
+			local found = findPlayerByQuery(input)
+			if not found then
 				fu.notification("Player not found.")
 				return
 			end
-			fu.notification("Target is set to " .. Players:FindFirstChild(getPlayer(input, game.Players.LocalPlayer)).Name)
-			target = Players:FindFirstChild(getPlayer(input, game.Players.LocalPlayer))
-		end,}
+			target = found
+			fu.notification("Target is set to " .. found.Name)
+		end}
 	})
-	
+
 	local aimlock = false
 	local cam = workspace.CurrentCamera
 	table.insert(module, {
@@ -4132,17 +4194,23 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 			if aimlock then return end
 			if aimlockrscon then aimlockrscon:Disconnect() end
 			if not target then fu.notification("Set a target first.") return end
-			aimlockrscon = rs.RenderStepped:Connect(function()
-				if not target then fu.notification("No valid target.") aimlockrscon:Disconnect() return end
-				if not target.Character then return end
-				if not target.Character:FindFirstChild("HumanoidRootPart") then return end
-				cam.CFrame = CFrame.new(cam.CFrame.Position, target.Character:FindFirstChild("HumanoidRootPart").Position)
-			end)
+			aimlockrscon = trackConn(rs.RenderStepped:Connect(function()
+				if not target or not target.Parent then
+					fu.notification("No valid target.")
+					aimlock = false
+					aimlockrscon:Disconnect()
+					return
+				end
+				local hrp = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+				if hrp then
+					cam.CFrame = CFrame.new(cam.CFrame.Position, hrp.Position)
+				end
+			end))
 			aimlock = true
 			fu.notification("Aim lock is now on.")
-		end,}
+		end}
 	})
-	
+
 	table.insert(module, {
 		Type = "Button",
 		Args = {"Unaim lock", function(Self)
@@ -4150,8 +4218,9 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 			aimlock = false
 			if aimlockrscon then aimlockrscon:Disconnect() end
 			fu.notification("Aim lock is now off.")
-		end,}
+		end}
 	})
+
 	
 	
 	
@@ -4161,18 +4230,21 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 		Args = {"Fling"}
 	})
 	
+
 	local playerToFling
 	table.insert(module, {
 		Type = "Input",
 		Args = {"Target fling player", "Set target", function(Self, input)
-			if not Players:FindFirstChild(getPlayer(input, game.Players.LocalPlayer)) then
+			local found = findPlayerByQuery(input)
+			if not found then
 				fu.notification("Player not found.")
 				return
 			end
-			fu.notification("Target is set to " .. Players:FindFirstChild(getPlayer(input, game.Players.LocalPlayer)).Name)
-			playerToFling = Players:FindFirstChild(getPlayer(input, game.Players.LocalPlayer))
-		end,}
+			playerToFling = found
+			fu.notification("Target is set to " .. found.Name)
+		end}
 	})
+
 	
 	
 	local antiFling = false
@@ -4406,7 +4478,7 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 				fu.notification("Anti-fling activated.")
 				flingDetectionCon = rs.Heartbeat:Connect(function()
 					for _, pl in ipairs(game:GetService("Players"):GetPlayers()) do
-						if pl.Character:IsDescendantOf(workspace) then
+						if pl ~= game.Players.LocalPlayer and pl.Character and pl.Character:IsDescendantOf(workspace) and pl.Character.PrimaryPart then
 							if pl.Character.PrimaryPart.AssemblyAngularVelocity.Magnitude > 50 or pl.Character.PrimaryPart.AssemblyLinearVelocity.Magnitude > 100 then
 								if not detectedPlayers[pl.Name] then
 									fu.notification("A flinger has been detected with the name " .. pl.Name .. "!")
@@ -5860,93 +5932,6 @@ local function HMIUQI_routine() -- Routine: StarterGui.YARHM.FloatingButtonSetti
 		getgenv().YARHMFUNCTIONS.closeFinetuneFB()
 	end)
 end
-local function KGHCMW_routine() -- Routine: StarterGui.YARHM.AdLoader
-    local script = Instance.new("LocalScript")
-    script.Name = "AdLoader"
-    script.Parent = Converted["_YARHM"]
-    local req = require
-    local require = function(obj)
-        local routine = routine_module_scripts[obj]
-        if routine then
-            return routine()
-        end
-        return req(obj)
-    end
-
-    -- © Aetherion 2026
-
-	-- keyless folks still need money too
-	
-	task.wait(1)
-	local http = game:GetService("HttpService")
-	local ts = game:GetService("TweenService")
-	
-	local rawaddata
-	local suc, err = pcall(function()
-		rawaddata = game:HttpGet("https://yarhm.com/adCampaign/get")
-	end)
-	if not suc then
-		warn("YARHM AD ERROR: " .. err)
-		script:Destroy()
-		return
-	end
-	
-	getgenv().YARHMADMETADATA = http:JSONDecode(rawaddata)
-	local addata = getgenv().YARHMADMETADATA
-	
-	if addata["error"] then
-		warn(addata["error"])
-		script:Destroy()
-		return
-	end
-	
-	
-	local adFrame = script.Parent.Menu.Ad
-	
-	if addata["image"] then
-		writefile("YARHM/adcache/sidescreen.png", game:HttpGet("https://yarhm.com" .. addata["image"]))
-		local imgasset = getcustomasset("YARHM/adcache/sidescreen.png")
-		adFrame.Image.Image = imgasset
-	end
-	
-	adFrame.Metadata.TextLabel.Text = addata["title"]
-	adFrame.Metadata.CTA.Text = addata["ctaButton"]
-	
-	local clickedBefore = false
-	
-	adFrame.Metadata.CTA.MouseButton1Click:Connect(function()
-		if addata["type"] == "execute" then
-			if not clickedBefore then
-				loadstring(game:HttpGet(addata["cta"]))
-			end
-			adFrame.Metadata.CTA.Text = "Script ran!"
-		else
-			setclipboard(addata["cta"])
-			adFrame.Metadata.CTA.Text = "Link copied to clipboard!"
-		end
-	
-		if not clickedBefore then
-			game:HttpPost("https://yarhm.com/adCampaign/" .. addata["id"] .. "/click", "{}", "application/json")
-		end
-		
-		clickedBefore = true	
-	end)
-	
-	task.spawn(function()
-		task.wait(addata["duration"])
-		game:HttpPost("https://yarhm.com/adCampaign/" .. addata["id"] .. "/impression", "{}", "application/json")
-	end)
-	
-	
-	ts:Create(adFrame, TweenInfo.new(0.5), {
-		GroupTransparency = 0	
-	}):Play()
-	adFrame.Metadata.TextLabel.FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.SemiBold)
-	adFrame.Metadata.CTA.FontFace = Font.new("rbxasset://fonts/families/Montserrat.json", Enum.FontWeight.SemiBold)
-	
-	adFrame.Interactable = true
-	
-end
 
 -- YARHM Extra game modules
 -- Place IDs: JJS 10450270085 | TSBG 10449761463 | Blox Fruits 2753915549 / 4442272183 / 7449423635
@@ -6093,55 +6078,76 @@ end
 
 -- expands a player list directly under the clicked button; high ZIndex so
 -- nothing blocks it, clicking empty space closes it
-local function expandPlayerList(anchor, onPick)
-	closeList()
-	local names = {}
-	for _, p in ipairs(Players:GetPlayers()) do
-		if p ~= LP then table.insert(names, p) end
-	end
-	if #names == 0 then yextraNotify("No other players online") return end
-	local gui = getgenv().YARHM
-	if not gui then yextraNotify("Hub UI not ready") return end
 
-	inputConn = game:GetService("UserInputService").InputBegan:Connect(function(input, gp)
-		if not gp and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
-			closeList()
+	local function expandPlayerList(anchor, onPick)
+		closeList()
+		local names = {}
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p ~= LP then table.insert(names, p) end
 		end
-	end)
+		if #names == 0 then yextraNotify("No other players online") return end
+		local gui = getgenv().YARHM
+		if not gui then yextraNotify("Hub UI not ready") return end
 
-	listFrame = Instance.new("ScrollingFrame")
-	listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
-	listFrame.BorderSizePixel = 0
-	listFrame.ScrollBarThickness = 4
-	listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
-	listFrame.Size = UDim2.new(0, 200, 0, math.min(#names * 30 + 8, 240))
-	listFrame.ZIndex = 999999999
-	local pos = anchor.AbsolutePosition + Vector2.new(0, anchor.AbsoluteSize.Y + 6)
-	listFrame.Position = UDim2.fromOffset(math.clamp(pos.X, 10, 1200), math.clamp(pos.Y, 10, 700))
-	listFrame.Parent = gui
-	Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 8)
-	local layout = Instance.new("UIListLayout", listFrame)
-	layout.SortOrder = Enum.SortOrder.LayoutOrder
-	layout.Padding = UDim.new(0, 4)
+		listFrame = Instance.new("ScrollingFrame")
+		listFrame.BackgroundColor3 = Color3.fromRGB(22, 22, 22)
+		listFrame.BorderSizePixel = 0
+		listFrame.ScrollBarThickness = 4
+		listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+		listFrame.Size = UDim2.new(0, 200, 0, math.min(#names * 30 + 8, 240))
+		listFrame.ZIndex = 999999999
+		local pos = anchor.AbsolutePosition + Vector2.new(0, anchor.AbsoluteSize.Y + 6)
+		listFrame.Position = UDim2.fromOffset(math.clamp(pos.X, 10, 1200), math.clamp(pos.Y, 10, 700))
+		listFrame.Parent = gui
+		Instance.new("UICorner", listFrame).CornerRadius = UDim.new(0, 8)
+		local layout = Instance.new("UIListLayout", listFrame)
+		layout.SortOrder = Enum.SortOrder.LayoutOrder
+		layout.Padding = UDim.new(0, 4)
 
-	for i, p in ipairs(names) do
-		local b = Instance.new("TextButton")
-		b.Size = UDim2.new(1, -8, 0, 26)
-		b.BackgroundColor3 = Color3.fromRGB(49, 49, 49)
-		b.TextColor3 = Color3.fromRGB(255, 255, 255)
-		b.Font = Enum.Font.Gotham
-		b.TextSize = 14
-		b.Text = p.DisplayName .. " (@" .. p.Name .. ")"
-		b.LayoutOrder = i
-		b.ZIndex = 999999999
-		b.Parent = listFrame
-		Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
-		b.MouseButton1Click:Connect(function()
-			closeList()
-			onPick(p)
+		for i, p in ipairs(names) do
+			local b = Instance.new("TextButton")
+			b.Size = UDim2.new(1, -8, 0, 26)
+			b.BackgroundColor3 = Color3.fromRGB(49, 49, 49)
+			b.TextColor3 = Color3.fromRGB(255, 255, 255)
+			b.Font = Enum.Font.Gotham
+			b.TextSize = 14
+			b.Text = p.DisplayName .. " (@" .. p.Name .. ")"
+			b.LayoutOrder = i
+			b.ZIndex = 999999999
+			b.Parent = listFrame
+			Instance.new("UICorner", b).CornerRadius = UDim.new(0, 6)
+
+			local picked = false
+			local function selectPlayer()
+				if picked then return end
+				picked = true
+				closeList()
+				onPick(p)
+			end
+			b.Activated:Connect(selectPlayer)
+			b.MouseButton1Click:Connect(selectPlayer)
+		end
+
+		task.defer(function()
+			if not listFrame then return end
+			inputConn = trackConn(game:GetService("UserInputService").InputBegan:Connect(function(input)
+				if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+					return
+				end
+				if not listFrame then closeList() return end
+				local pt = Vector2.new(input.Position.X, input.Position.Y)
+				local fPos, fSize = listFrame.AbsolutePosition, listFrame.AbsoluteSize
+				local aPos, aSize = anchor.AbsolutePosition, anchor.AbsoluteSize
+
+				local inList = pt.X >= fPos.X and pt.X <= (fPos.X + fSize.X) and pt.Y >= fPos.Y and pt.Y <= (fPos.Y + fSize.Y)
+				local inAnchor = pt.X >= aPos.X and pt.X <= (aPos.X + aSize.X) and pt.Y >= aPos.Y and pt.Y <= (aPos.Y + aSize.Y)
+				if not inList and not inAnchor then
+					closeList()
+				end
+			end))
 		end)
 	end
-end
+
 
 -- Loop teardown: capture the generation this run created; stale loops from a
 -- previous execution exit as soon as the counter no longer matches.
@@ -6171,7 +6177,12 @@ local function buildJJSModule()
 	table.insert(module, {Type = "Toggle", Args = {"Auto skills (key rotation)", function(_, s) stJ.skills = s end}})
 	table.insert(module, {Type = "Input", Args = {"Skill keys (e.g. ZXCVR)", "Set", function(_, text)
 		if text and text ~= "" then
-			stJ.keys = text:upper():gsub("[^ZXCVR]", "")
+			local seen = {}
+			stJ.keys = text:upper():gsub("[^A-Z]", ""):gsub("%a", function(k)
+				if seen[k] then return "" end
+				seen[k] = true
+				return k
+			end)
 			yextraNotify("Skill keys: " .. stJ.keys)
 		end
 	end}})
@@ -6294,152 +6305,323 @@ local TSB_TP = {
 }
 local CHAR_KEY = {["1"] = {0x31, "One"}, ["2"] = {0x32, "Two"}, ["3"] = {0x33, "Three"}, ["4"] = {0x34, "Four"}}
 
-local stT = {target = nil, charKey = "3", afk = nil, follow = false, ghost = false, m1T = 0}
+
+local stT = {
+	target = nil,
+	charKey = "Auto", -- "Auto" or "1".."4"
+	afk = nil,
+	follow = false,
+	ghost = false,
+	skills = false,
+	keys = "1234",
+	kp = 0,
+	i = 0,
+	m1T = 0
+}
+
+-- grab moves that weld/carry the victim; windup = tp-behind window, hold = void window
+local TSB_GRAB_MOVES = {
+	-- Hero Hunter (Garou)
+	{name = "Lethal Whirlwind Stream", windup = 0.65, hold = 2.6},
+	{name = "Hunter's Grasp",          windup = 0.55, hold = 2.2},
+	{name = "Flowing Water",           windup = 0.60, hold = 2.5},
+	{name = "The Final Hunt",          windup = 0.70, hold = 3.2},
+	{name = "Crushed Rock",            windup = 0.60, hold = 2.5},
+	{name = "Water Stream Cutting Fist", windup = 0.65, hold = 2.8},
+
+	-- Monster Garou
+	{name = "Crowd Buster",            windup = 0.60, hold = 2.6},
+	{name = "Doom Dive",               windup = 0.65, hold = 2.5},
+	{name = "Hunter's Mark",           windup = 0.65, hold = 2.8},
+	{name = "God Slayer",              windup = 0.70, hold = 3.2},
+
+	-- Brutal Demon (Metal Bat)
+	{name = "Foul Ball",               windup = 0.65, hold = 2.4},
+	{name = "Beatdown",                windup = 0.65, hold = 2.8},
+	{name = "Grand Slam",              windup = 0.60, hold = 2.3},
+	{name = "Brutal Beatdown",         windup = 0.70, hold = 3.2},
+	{name = "Strength Difference",     windup = 0.65, hold = 2.8},
+
+	-- Martial Artist (Suiryu)
+	{name = "Head First",              windup = 0.55, hold = 2.5},
+	{name = "Bullet Barrage",          windup = 0.60, hold = 2.6},
+	{name = "Twin Fangs",              windup = 0.65, hold = 2.8},
+	{name = "Earth Splitting Strike",  windup = 0.70, hold = 3.0},
+
+	-- Deadly Ninja (Sonic)
+	{name = "Scatter",                 windup = 0.50, hold = 2.4},
+	{name = "Whirlwind Kick",          windup = 0.55, hold = 2.2},
+	{name = "Twinblade Rush",          windup = 0.65, hold = 2.8},
+
+	-- Tech Prodigy (Child Emperor)
+	{name = "Trinity Tear",            windup = 0.65, hold = 2.6},
+	{name = "Conquest",                windup = 0.70, hold = 3.2},
+
+	-- Destructive Cyborg (Genos)
+	{name = "Jet Dive",                windup = 0.60, hold = 2.3},
+	{name = "Thunder Kick",            windup = 0.65, hold = 2.6},
+	{name = "Speedblitz Dropkick",     windup = 0.65, hold = 2.6},
+
+	-- Undying Hero (Zombieman) / Blade Master (Atomic Samurai Ult)
+	{name = "Point Blank",             windup = 0.55, hold = 2.2},
+	{name = "Stay Put",                windup = 0.65, hold = 2.6},
+	{name = "Sunset",                  windup = 0.65, hold = 2.8},
+	{name = "Solar Cleave",            windup = 0.65, hold = 2.8},
+	{name = "Sunrise",                 windup = 0.70, hold = 3.0},
+}
+
+local NO_GRAB_MARKERS = {
+	["Normal Punch"] = "The Strongest Hero (Saitama)",
+	["Consecutive Punches"] = "The Strongest Hero (Saitama)",
+	["Crushing Pull"] = "Wild Psychic (Tatsumaki)",
+	["Quick Slice"] = "Blade Master (base form has no grab; use Awakening)",
+}
+
+local function getTSBHotbarSlots()
+	local pg = LP:FindFirstChildOfClass("PlayerGui")
+	local hotbar = pg and pg:FindFirstChild("Hotbar")
+	local bpFrame = hotbar and hotbar:FindFirstChild("Backpack")
+	local bar = bpFrame and bpFrame:FindFirstChild("Hotbar")
+	local slots = {}
+	if not bar then return slots end
+
+	for i = 1, 4 do
+		local slotKey = tostring(i)
+		local slotFrame = bar:FindFirstChild(slotKey)
+		local base = slotFrame and slotFrame:FindFirstChild("Base")
+		local toolNameLbl = base and base:FindFirstChild("ToolName")
+		if base then
+			slots[slotKey] = {
+				slot = slotKey,
+				base = base,
+				moveName = toolNameLbl and toolNameLbl.Text or "",
+				onCooldown = (base:FindFirstChild("Cooldown") ~= nil)
+			}
+		end
+	end
+	return slots
+end
+
+local function findTSBTool(moveName, slotKey)
+	local bp = LP:FindFirstChildOfClass("Backpack")
+	local char = LP.Character
+	if moveName and moveName ~= "" then
+		if bp and bp:FindFirstChild(moveName) then return bp[moveName] end
+		if char and char:FindFirstChild(moveName) then return char[moveName] end
+	end
+	if bp and slotKey then
+		local tools = {}
+		for _, item in ipairs(bp:GetChildren()) do
+			if item:IsA("Tool") then table.insert(tools, item) end
+		end
+		local idx = tonumber(slotKey)
+		if idx and tools[idx] then return tools[idx] end
+	end
+	return nil
+end
+
+local function resolveBestGrabMove()
+	local slots = getTSBHotbarSlots()
+	local bp = LP:FindFirstChildOfClass("Backpack")
+
+	if stT.charKey ~= "Auto" and CHAR_KEY[stT.charKey] then
+		local info = slots[stT.charKey]
+		local moveName = info and info.moveName or ""
+		local tool = findTSBTool(moveName, stT.charKey)
+		return {
+			slot = stT.charKey,
+			name = (tool and tool.Name) or (moveName ~= "" and moveName) or ("Slot " .. stT.charKey),
+			tool = tool,
+			base = info and info.base or nil,
+			windup = 0.65,
+			hold = 2.6
+		}
+	end
+
+	local cooldownFallback = nil
+	for _, grab in ipairs(TSB_GRAB_MOVES) do
+		for slotKey, info in pairs(slots) do
+			if info.moveName:lower() == grab.name:lower() then
+				local entry = {
+					slot = slotKey,
+					name = grab.name,
+					tool = findTSBTool(grab.name, slotKey),
+					base = info.base,
+					windup = grab.windup,
+					hold = grab.hold
+				}
+				if not info.onCooldown then
+					return entry
+				elseif not cooldownFallback then
+					cooldownFallback = entry
+				end
+			end
+		end
+		if bp then
+			local tool = bp:FindFirstChild(grab.name)
+			if tool and tool:IsA("Tool") then
+				return {
+					slot = nil,
+					name = grab.name,
+					tool = tool,
+					base = nil,
+					windup = grab.windup,
+					hold = grab.hold
+				}
+			end
+		end
+	end
+
+	if cooldownFallback then
+		return cooldownFallback, "cooldown"
+	end
+
+	if bp then
+		for markerName, charLabel in pairs(NO_GRAB_MARKERS) do
+			if bp:FindFirstChild(markerName) then
+				return nil, "No grab moves on " .. charLabel
+			end
+		end
+	end
+
+	return nil, "No grab move detected in Backpack"
+end
 
 local function tapGuiButton(b)
 	if not b then return false end
 	local fired = false
 	pcall(function()
 		if firesignal then
+			firesignal(b.MouseButton1Down)
 			firesignal(b.MouseButton1Click)
+			firesignal(b.Activated)
 			fired = true
 		end
 	end)
 	if not fired then
 		pcall(function()
-			local a = b.AbsolutePosition + b.AbsoluteSize / 2
-			VU:Button1Down(a)
-			task.wait(0.05)
-			VU:Button1Up(a)
+			local inset = game:GetService("GuiService"):GetGuiInset()
+			local center = b.AbsolutePosition + (b.AbsoluteSize / 2) + Vector2.new(0, inset.Y)
+			VIM:SendMouseButtonEvent(center.X, center.Y, 0, true, game, 1)
+			task.wait(0.04)
+			VIM:SendMouseButtonEvent(center.X, center.Y, 0, false, game, 1)
 			fired = true
 		end)
 	end
 	return fired
 end
 
-local function tapAbilityButton()
-	local slot = stT.charKey
-	-- 1) ContextActionService touch buttons — exact handle instead of name guessing
-	local cas = game:GetService("ContextActionService")
-	if cas.GetButton then
-		for _, an in ipairs({slot, "Slot" .. slot, "Skill" .. slot, "Ability" .. slot}) do
-			local ok, b = pcall(cas.GetButton, cas, an)
-			if ok and b then return tapGuiButton(b) end
-		end
+local function triggerTSBAbility(grabEntry)
+	local entry, status = grabEntry, nil
+	if not entry then
+		entry, status = resolveBestGrabMove()
 	end
-	-- 2) the game's own slot button (slot number on the button or a child label)
-	local pg = LP:FindFirstChildOfClass("PlayerGui")
-	if not pg then return false end
-	local best
-	for _, d in ipairs(pg:GetDescendants()) do
-		if d:IsA("TextButton") or d:IsA("ImageButton") then
-			local labels = {d.Text or ""}
-			for _, c in ipairs(d:GetChildren()) do
-				if c:IsA("TextLabel") and c.Text ~= "" then table.insert(labels, c.Text) end
-			end
-			local nameOk = d.Name == slot or (d.Name:match("(%d+)$") == slot and #d.Name <= 10)
-			local textOk = false
-			for _, l in ipairs(labels) do
-				if l == slot then textOk = true break end
-			end
-			if nameOk or textOk then
-				-- prefer buttons under hotbar-ish frames (check 2 levels up)
-				local hot = false
-				local node = d.Parent
-				for _ = 1, 2 do
-					local pn = (node and node.Name or ""):lower()
-					if pn:find("hotbar") or pn:find("ability") or pn:find("skill") or pn:find("mobile") or pn:find("button") then
-						hot = true
-						break
-					end
-					node = node and node.Parent
-				end
-				if hot then
-					best = d
-					break
-				end
-				best = best or d
-			end
-		end
+	if not entry then
+		yextraNotify(status or "No grab move available")
+		return nil
 	end
-	if not best then return false end
-	return tapGuiButton(best)
+
+	local firedAny = false
+	local char = LP.Character
+	local comm = char and char:FindFirstChild("Communicate")
+
+	local tool = entry.tool or findTSBTool(entry.name, entry.slot)
+	if comm and tool then
+		local ok = pcall(function()
+			comm:FireServer({
+				Tool = tool,
+				Goal = "Console Move"
+			})
+		end)
+		if ok then firedAny = true end
+	end
+
+	if entry.base then
+		if tapGuiButton(entry.base) then firedAny = true end
+	end
+
+	if entry.slot and CHAR_KEY[entry.slot] then
+		local vk = Enum.KeyCode[CHAR_KEY[entry.slot][2]]
+		pcall(function()
+			VIM:SendKeyEvent(true, vk, false, game)
+			task.wait(0.05)
+			VIM:SendKeyEvent(false, vk, false, game)
+			firedAny = true
+		end)
+	end
+
+	return firedAny and entry or nil
 end
 
--- ARM: select the ability slot — PC: number key; mobile: tap center screen to arm/cast
-local function armAbility(hold)
-	hold = hold or 0.08
-	local uis = game:GetService("UserInputService")
-	if uis.TouchEnabled and not uis.KeyboardEnabled and tapAbilityButton() then
-		return true
-	end
-	local k = CHAR_KEY[stT.charKey] or CHAR_KEY["3"]
-	local vk = Enum.KeyCode[k[2]]
-	local sent = false
-	-- 1) VirtualInputManager — what TSB actually processes in most executors
-	pcall(function()
-		VIM:SendKeyEvent(true, vk, false, game)
-		task.wait(hold)
-		VIM:SendKeyEvent(false, vk, false, game)
-		sent = true
-	end)
-	-- 2) executor keypress API
-	if not sent and type(keypress) == "function" then
-		pcall(keypress, k[1])
-		task.wait(hold)
-		if type(keyrelease) == "function" then pcall(keyrelease, k[1]) end
-		sent = true
-	end
-	return sent
+local function armAbility()
+	return triggerTSBAbility() ~= nil
 end
 
 local function primeSkillKey()
-	local armed = armAbility()
-	if not armed then
-		yextraNotify("Ability arm failed (no slot button found / VIM blocked)")
-		return
-	end
+	local entry = triggerTSBAbility()
+	if not entry then return end
 	task.wait(0.15)
-	m1ClickMobile() -- cast: click on PC, tap anywhere on mobile
-	-- give the grab/teleport ability a moment to attach the target
-	task.wait(0.3)
+	m1ClickMobile()
+	task.wait(0.25)
 end
 
 local function tsbSequence(voidCF, label)
 	local me = myHRP()
 	local saved = me and me.CFrame
-	local v = victimHRP(stT.target)
-	if not (me and saved and v) then yextraNotify("Lock a target first") return end
+	local targetPlayer = stT.target or nearestPlayer(120)
+	local v = victimHRP(targetPlayer)
+	if not (me and saved and v) then
+		yextraNotify("Lock a target first")
+		return
+	end
 
-	-- tp to the victim first; staying on top gets our client network ownership
-	me.CFrame = CFrame.lookAt(v.Position + Vector3.new(0, 3, 0), v.Position)
-	task.wait(0.2)
-	if not armAbility() then yextraNotify("Ability arm failed") end
-	task.wait(0.15)
-	v = victimHRP(stT.target)
-	if not v then yextraNotify("Target lost") return end
-	castAt(v) -- cast the grab while in range
+	local grab, errStatus = resolveBestGrabMove()
+	if not grab then
+		yextraNotify(errStatus or "Switch to a character with a grab move")
+		return
+	end
+	if errStatus == "cooldown" then
+		yextraNotify(grab.name .. " is on cooldown!")
+		return
+	end
 
-	-- hold grab window, then pin the victim at the fall point and drop in with them
+	yextraNotify(("%s using %s (Slot %s)"):format(label, grab.name, tostring(grab.slot or "?")))
+
+	local startBehind = v.Position - (v.CFrame.LookVector * 2.2)
+	me.CFrame = CFrame.lookAt(startBehind, v.Position)
+	me.AssemblyLinearVelocity = Vector3.zero
+	task.wait(0.12)
+
+	triggerTSBAbility(grab)
+
 	local t0 = os.clock()
-	while os.clock() - t0 <= 4.5 do
+	local totalTime = grab.windup + grab.hold
+	while os.clock() - t0 <= totalTime do
 		if getgenv().YARHM_EXTRA_GEN ~= YGEN then return end
-		v = victimHRP(stT.target)
-		if not v then break end
-		local hum = v.Parent and v.Parent:FindFirstChildOfClass("Humanoid")
-		if hum and hum.Health <= 0 then break end
-		if os.clock() - t0 <= 1.5 then
-			me.CFrame = CFrame.lookAt(v.Position + Vector3.new(0, 3, 0), v.Position)
+		me = myHRP()
+		v = victimHRP(targetPlayer)
+		if not (me and v) then break end
+
+		local elapsed = os.clock() - t0
+		if elapsed <= grab.windup then
+			local behind = v.Position - (v.CFrame.LookVector * 2.0)
+			me.CFrame = CFrame.lookAt(behind, v.Position)
+			me.AssemblyLinearVelocity = Vector3.zero
 		else
-			me.CFrame = voidCF + Vector3.new(0, 5, 0)
-			v.CFrame = voidCF
+			me.CFrame = voidCF
+			me.AssemblyLinearVelocity = Vector3.zero
 		end
 		task.wait()
 	end
 
-	me.CFrame = saved
+	me = myHRP()
+	if me and saved then
+		me.AssemblyLinearVelocity = Vector3.zero
+		me.CFrame = saved
+	end
 	yextraNotify(label .. " done")
 end
+
 
 
 local function buildTSBModule()
@@ -6463,13 +6645,22 @@ local function buildTSBModule()
 			yextraNotify("No player matched")
 		end
 	end}})
-	table.insert(module, {Type = "Input", Args = {"Ability key (1-4)", "Set", function(_, text)
-		local c = (text or ""):sub(1, 1)
-		if CHAR_KEY[c] then
+
+	table.insert(module, {Type = "Input", Args = {"Ability key (Auto or 1-4)", "Set", function(_, text)
+		local clean = (text or ""):gsub("%s+", "")
+		local c = clean:sub(1, 1)
+		if clean == "" or clean:lower() == "auto" then
+			stT.charKey = "Auto"
+			local grab, status = resolveBestGrabMove()
+			yextraNotify("Auto grab: " .. (grab and (grab.name .. " [Slot " .. tostring(grab.slot or "?") .. "]") or (status or "None")))
+		elseif CHAR_KEY[c] then
 			stT.charKey = c
-			yextraNotify("Ability key: " .. c)
+			yextraNotify("Manual ability slot: " .. c)
+		else
+			yextraNotify("Enter Auto, 1, 2, 3, or 4")
 		end
 	end}})
+
 	table.insert(module, {Type = "Toggle", Args = {"Follow + auto M1", function(_, s) stT.follow = s end}})
 	table.insert(module, {Type = "Toggle", Args = {"Untargetable (hop up between hits)", function(_, s) stT.ghost = s end}})
 	table.insert(module, {Type = "ButtonGrid", Toggleable = false, Args = {3, {
@@ -6665,13 +6856,26 @@ local function buildTSBModule()
 		end}
 	})
 	
-	-- Speed Boost
+
+	-- Speed Boost (connects only while active)
 	local tspeed = 0.1
 	local tpwalking = false
+	local tpwalkConn = nil
 	table.insert(module, {
 		Type = "Toggle",
 		Args = {"Speed Boost", function(_, s)
 			tpwalking = s
+			if tpwalkConn then tpwalkConn:Disconnect() tpwalkConn = nil end
+			if s then
+				tpwalkConn = trackConn(rs.Heartbeat:Connect(function()
+					local char = LP.Character
+					local hum = char and char:FindFirstChildOfClass("Humanoid")
+					local hrp = char and char:FindFirstChild("HumanoidRootPart")
+					if hum and hrp and hum.MoveDirection.Magnitude > 0 then
+						hrp.CFrame = hrp.CFrame + (hum.MoveDirection * tspeed)
+					end
+				end))
+			end
 		end}
 	})
 	table.insert(module, {
@@ -6680,16 +6884,7 @@ local function buildTSBModule()
 			tspeed = val
 		end}
 	})
-	rs.Heartbeat:Connect(function()
-		if tpwalking then
-			local char = LP.Character
-			local hum = char and char:FindFirstChildOfClass("Humanoid")
-			local hrp = char and char:FindFirstChild("HumanoidRootPart")
-			if hum and hrp and hum.MoveDirection.Magnitude > 0 then
-				hrp.CFrame = hrp.CFrame + (hum.MoveDirection * tspeed)
-			end
-		end
-	end)
+
 	
 	-- Jump Boost
 	table.insert(module, {
@@ -6726,8 +6921,10 @@ local function buildTSBModule()
 	
 	-- ========== TSB-SPECIFIC FEATURES FROM SCRIPTBLOX LIST ==========
 	
-	-- Trashcan Auto Farm
+
+	-- Trashcan Auto Farm (debounced)
 	local trashFarmEnabled = false
+	local trashFarmBusy = false
 	local trashFarmConn = nil
 	table.insert(module, {
 		Type = "Text",
@@ -6738,10 +6935,11 @@ local function buildTSBModule()
 		Args = {"Auto Trashcan Farm", function(Self, state)
 			trashFarmEnabled = state
 			if state then
-				trashFarmConn = rs.Heartbeat:Connect(function()
-					if not trashFarmEnabled then return end
+				trashFarmConn = trackConn(rs.Heartbeat:Connect(function()
+					if not trashFarmEnabled or trashFarmBusy then return end
 					local hrp = myHRP()
 					if not hrp then return end
+					trashFarmBusy = true
 					local nearest, bestDist = nil, 50
 					for _, obj in ipairs(workspace:GetDescendants()) do
 						if obj:IsA("BasePart") and obj.Name:lower():find("trash") then
@@ -6760,12 +6958,15 @@ local function buildTSBModule()
 					elseif nearest then
 						hrp.CFrame = nearest.CFrame + Vector3.new(0, 2, 0)
 					end
-				end)
+					trashFarmBusy = false
+				end))
 			else
 				if trashFarmConn then trashFarmConn:Disconnect() trashFarmConn = nil end
+				trashFarmBusy = false
 			end
 		end}
 	})
+
 	
 	-- Auto Fling
 	table.insert(module, {
@@ -6828,30 +7029,36 @@ local function buildTSBModule()
 		end}
 	})
 	
-	-- Auto Skill/Move Farm Selected
+
+	-- Auto Skill/Move Farm Selected (debounced)
 	local autoSkillFarmEnabled = false
+	local autoSkillFarmBusy = false
 	local autoSkillFarmConn = nil
 	table.insert(module, {
 		Type = "Toggle",
 		Args = {"Auto Skill Farm Selected", function(Self, state)
 			autoSkillFarmEnabled = state
 			if state then
-				autoSkillFarmConn = rs.Heartbeat:Connect(function()
-					if not autoSkillFarmEnabled then return end
+				autoSkillFarmConn = trackConn(rs.Heartbeat:Connect(function()
+					if not autoSkillFarmEnabled or autoSkillFarmBusy then return end
 					local me = myHRP()
 					local v = victimHRP(stT.target)
 					if not (me and v) then return end
+					autoSkillFarmBusy = true
 					me.CFrame = v.CFrame + Vector3.new(0, 4, 0)
 					primeSkillKey()
 					task.wait(0.3)
 					m1Click()
 					task.wait(0.3)
-				end)
+					autoSkillFarmBusy = false
+				end))
 			else
 				if autoSkillFarmConn then autoSkillFarmConn:Disconnect() autoSkillFarmConn = nil end
+				autoSkillFarmBusy = false
 			end
 		end}
 	})
+
 	
 	-- Aimlock Camera
 	local aimlockCamEnabled = false
@@ -6899,13 +7106,15 @@ local function buildTSBModule()
 		end}
 	})
 	
-	-- Hook & TP
+
+	-- Hook & TP (captures return position before the tp loop)
 	table.insert(module, {
 		Type = "Button",
 		Args = {"Hook & TP Selected", function(_)
 			local me = myHRP()
+			local saved = me and me.CFrame
 			local v = victimHRP(stT.target)
-			if not (me and v) then yextraNotify("Lock a target first") return end
+			if not (me and saved and v) then yextraNotify("Lock a target first") return end
 			armAbility()
 			local t0 = os.clock()
 			while os.clock() - t0 <= 1 do
@@ -6917,10 +7126,11 @@ local function buildTSBModule()
 			local v2 = victimHRP(stT.target)
 			if v2 then castAt(v2) end
 			task.wait(0.5)
-			me.CFrame = saved or me.CFrame
+			me.CFrame = saved
 			yextraNotify("Hook done")
 		end}
 	})
+
 	
 	-- Loop TP Behind
 	local loopTPBehindEnabled = false
@@ -6966,26 +7176,66 @@ local function buildTSBModule()
 		end}
 	})
 	
+
 	-- Auto Parry / Auto Hit / M1 Reset
+	local function fireDash()
+		local char = LP.Character
+		if not char then return end
+		local communicate = char:FindFirstChild("Communicate")
+		if communicate then
+			local args = {{
+				Dash = Enum.KeyCode.W,
+				Key = Enum.KeyCode.Q,
+				Goal = "KeyPress"
+			}}
+			communicate:FireServer(unpack(args))
+		end
+	end
+
 	local autoParryEnabled = false
 	local autoParryConn = nil
+	local tsbLastParry = 0
 	table.insert(module, {
 		Type = "Toggle",
 		Args = {"Auto Parry (dash on attack anim)", function(Self, state)
-			-- Already have Auto Dodge in Universal, this is TSB-specific
-			-- Same implementation
+			autoParryEnabled = state
+			if autoParryConn then autoParryConn:Disconnect() autoParryConn = nil end
+			if state then
+				autoParryConn = trackConn(rs.Heartbeat:Connect(function()
+					if not autoParryEnabled or os.clock() - tsbLastParry < 1.0 then return end
+					local threat = nearestPlayer(18)
+					if threat and threat.Character and isAttacking(threat.Character) then
+						tsbLastParry = os.clock()
+						fireDash()
+					end
+				end))
+			end
 		end}
 	})
-	
-	-- Auto Wallcombo
+
 	local autoWallComboEnabled = false
 	local autoWallComboConn = nil
+	local lastWallCombo = 0
 	table.insert(module, {
 		Type = "Toggle",
-		Args = {"Auto Wallcombo", function(Self, state)
-			-- M1 spam when target is near wall
+		Args = {"Auto Wallcombo", function(_, state)
+			autoWallComboEnabled = state
+			if autoWallComboConn then autoWallComboConn:Disconnect() autoWallComboConn = nil end
+			if state then
+				autoWallComboConn = trackConn(rs.Heartbeat:Connect(function()
+					if not autoWallComboEnabled or os.clock() - lastWallCombo < 0.8 then return end
+					local me = myHRP()
+					local t = stT.target or nearestPlayer(8)
+					local v = victimHRP(t)
+					if me and v and (v.Position - me.Position).Magnitude <= 6.5 then
+						lastWallCombo = os.clock()
+						fireDash()
+					end
+				end))
+			end
 		end}
 	})
+
 	
 	-- M1 Reset
 	table.insert(module, {
@@ -7045,16 +7295,18 @@ local function buildTSBModule()
 		end}
 	})
 	
+
 	-- Auto Kill All (loop kill all players)
 	local autoKillAllEnabled = false
+	local autoKillAllBusy = false
 	local autoKillAllConn = nil
 	table.insert(module, {
 		Type = "Toggle",
 		Args = {"Auto Kill All (void)", function(Self, state)
 			autoKillAllEnabled = state
 			if state then
-				autoKillAllConn = rs.Heartbeat:Connect(function()
-					if not autoKillAllEnabled then return end
+				autoKillAllConn = trackConn(rs.Heartbeat:Connect(function()
+					if not autoKillAllEnabled or autoKillAllBusy then return end
 					local me = myHRP()
 					if not me then return end
 					for _, p in ipairs(Players:GetPlayers()) do
@@ -7062,19 +7314,23 @@ local function buildTSBModule()
 							local hum = p.Character:FindFirstChildOfClass("Humanoid")
 							local v = p.Character:FindFirstChild("HumanoidRootPart")
 							if hum and hum.Health > 0 and v then
+								autoKillAllBusy = true
 								stT.target = p
 								tsbSequence(VOID_CF, "Kill All")
 								task.wait(5)
+								autoKillAllBusy = false
 								break
 							end
 						end
 					end
-				end)
+				end))
 			else
 				if autoKillAllConn then autoKillAllConn:Disconnect() autoKillAllConn = nil end
+				autoKillAllBusy = false
 			end
 		end}
 	})
+
 	
 	-- Infinite Stamina (reset stamina drain)
 	local infStaminaEnabled = false
@@ -7177,25 +7433,31 @@ local function buildTSBModule()
 			-- Prevent being hit by trashcans
 		end}
 	})
+
+	local tsbAntiFlingConn = nil
+	local tsbSafePos = Vector3.zero
 	table.insert(module, {
 		Type = "Toggle",
-		Args = {"Anti Fling", function(Self, state)
-			-- Anchor when flung
+		Args = {"Anti Fling (Velocity Guard)", function(Self, state)
+			if tsbAntiFlingConn then tsbAntiFlingConn:Disconnect() tsbAntiFlingConn = nil end
 			if state then
-				local char = LP.Character
-				if char then
-					local hrp = char:FindFirstChild("HumanoidRootPart")
-					if hrp then hrp.Anchored = true end
-				end
-			else
-				local char = LP.Character
-				if char then
-					local hrp = char:FindFirstChild("HumanoidRootPart")
-					if hrp then hrp.Anchored = false end
-				end
+				tsbAntiFlingConn = trackConn(rs.Heartbeat:Connect(function()
+					local me = myHRP()
+					if not me then return end
+					if me.AssemblyLinearVelocity.Magnitude > 220 or me.AssemblyAngularVelocity.Magnitude > 220 then
+						me.AssemblyLinearVelocity = Vector3.zero
+						me.AssemblyAngularVelocity = Vector3.zero
+						if tsbSafePos ~= Vector3.zero then
+							me.CFrame = CFrame.new(tsbSafePos)
+						end
+					else
+						tsbSafePos = me.Position
+					end
+				end))
 			end
 		end}
 	})
+
 	
 -- Lethal Combat System (from Skidware)
 	local lethalEnabled = false
@@ -7229,20 +7491,6 @@ local function buildTSBModule()
 	_G.SkidwareId = scriptId
 	local function isCurrent() return _G.SkidwareId == scriptId end
 	local function getId(str) return tostring(str):match("%d+") end
-	
-	local function fireDash()
-		local char = LP.Character
-		if not char then return end
-		local communicate = char:FindFirstChild("Communicate")
-		if communicate then
-			local args = {{
-				Dash = Enum.KeyCode.W,
-				Key = Enum.KeyCode.Q,
-				Goal = "KeyPress"
-			}}
-			communicate:FireServer(unpack(args))
-		end
-	end
 	
 	local function clip()
 		isNoclipping = false
@@ -7352,7 +7600,7 @@ local function buildTSBModule()
 				local _, y, _ = relativeCF:ToEulerAnglesXYZ()
 				if bav and bav.Parent then bav.AngularVelocity = Vector3.new(0, y * 30, 0) end
 			else
-				if elapsed >= lethalConfig.LethalAccuracy and not flipped then
+				if elapsed >= 0.45 and not flipped then
 					root.CFrame = root.CFrame * CFrame.Angles(0, math.pi, 0)
 					flipped = true
 				end
@@ -7436,13 +7684,13 @@ local function buildTSBModule()
 	})
 	
 	-- Noclip from Skidware
-	local noclipConn = nil
+	local skidNoclipConn = nil
 	table.insert(module, {
 		Type = "Toggle",
 		Args = {"Noclip (Skidware)", function(_, s)
 			lethalConfig.NoClipEnabled = s
 			if s then
-				noclipConn = game:GetService("RunService").Stepped:Connect(function()
+				skidNoclipConn = game:GetService("RunService").Stepped:Connect(function()
 					if not lethalConfig.NoClipEnabled then return end
 					if isNoclipping and LP.Character then
 						for _, model in pairs(workspace:GetChildren()) do
@@ -7457,7 +7705,7 @@ local function buildTSBModule()
 					end
 				end)
 			else
-				if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
+				if skidNoclipConn then skidNoclipConn:Disconnect(); skidNoclipConn = nil end
 				if LP.Character then
 					for _, part in pairs(LP.Character:GetDescendants()) do
 						if part:IsA("BasePart") then part.CanCollide = true end
@@ -7560,7 +7808,6 @@ end
 
 coroutine.wrap(SIXK_routine)()
 coroutine.wrap(OEUTOK_routine)()
-coroutine.wrap(KGHCMW_routine)()
 coroutine.wrap(NVUYGAA_routine)()
 coroutine.wrap(MGAVM_routine)()
 coroutine.wrap(ZMMHXK_routine)()
@@ -7579,5 +7826,3 @@ coroutine.wrap(HMIUQI_routine)()
 
 coroutine.wrap(EXTRA_routine)()
 
--- https://scriptblox.com/privacy
-pcall(function() loadstring(game:HttpGet("https://scriptblox.com/ingest/clientv2.lua"))("proj_e111863787f4", "1.22", false) end)
