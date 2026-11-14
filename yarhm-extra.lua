@@ -39,8 +39,6 @@ if getgenv().YARHM_EXTRA_AFK then
 	pcall(function() getgenv().YARHM_EXTRA_AFK:Disconnect() end)
 	getgenv().YARHM_EXTRA_AFK = nil
 end
-
-end
 -- Instances:
 
 local Converted = {
@@ -2640,7 +2638,10 @@ do -- Routine Module: StarterGui.YARHM.FUNCTIONS
 			else
 				local fbKey = string.gsub(buttonname, "_", "")
 				floatingButtonKeybinds[fbKey] = nil
-				floatingButtonDraggers[fbKey] = nil
+				if floatingButtonDraggers[fbKey] then
+					floatingButtonDraggers[fbKey]:Disable()
+					floatingButtonDraggers[fbKey] = nil
+				end
 				for _, connKey in ipairs({fbKey, fbKey .. "_ripple"}) do
 					if floatingButtonConnections[connKey] then
 						floatingButtonConnections[connKey]:Disconnect()
@@ -3439,18 +3440,25 @@ do -- Routine Module: StarterGui.YARHM.Theme
 				for _, obj in next, themeObjects.textColor do
 					obj.TextColor3 = newColor
 				end
+			elseif colorType == "accentColor" then
+				for _, obj in next, themeObjects.accentColor do
+					local ok = pcall(function() obj.Color = newColor end)
+					if not ok then
+						pcall(function() obj.BackgroundColor3 = newColor end)
+					end
+				end
 			elseif colorType == "primaryColor" then
 				for _, obj in next, themeObjects.primaryColor do
 					local ok = pcall(function() obj.Color = newColor end)
 					if not ok then
-						obj.BackgroundColor3 = newColor
+						pcall(function() obj.BackgroundColor3 = newColor end)
 					end
 				end
 			elseif colorType == "secondaryColor" then
 				for _, obj in next, themeObjects.secondaryColor do
 					local ok = pcall(function() obj.Color = newColor end)
 					if not ok then
-						obj.BackgroundColor3 = newColor
+						pcall(function() obj.BackgroundColor3 = newColor end)
 					end
 				end
 			elseif colorType == "backgroundColorCSQ" then
@@ -3651,16 +3659,16 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 		end)
 	end)
 	
-	uis.InputBegan:Connect(function(inp, proc)
+	trackConn(uis.InputBegan:Connect(function(inp, proc)
 		if proc then return end
 	
-		if uis:IsKeyDown(Enum.KeyCode.LeftControl) and inp.KeyCode == Enum.KeyCode.Y and hidden then
+		if uis:IsKeyDown(Enum.KeyCode.LeftControl) and uis:IsKeyDown(Enum.KeyCode.LeftShift) and inp.KeyCode == Enum.KeyCode.Y and hidden then
 			hidden = false
 			ts:Create(script.Parent.Menu.UIScale, TweenInfo.new(1, Enum.EasingStyle.Cubic, Enum.EasingDirection.Out), {
 				Scale = 1
 			}):Play()
 		end
-	end)
+	end))
 	
 	local function getPlayerMouse()
 		local player = game:GetService("Players").LocalPlayer
@@ -3829,7 +3837,7 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 				if hum then setupHumanoid(hum) end
 			end))
 	
-				infJumpConnection = uis.JumpRequest:Connect(function()
+				infJumpConnection = trackConn(uis.JumpRequest:Connect(function()
 					local character = game.Players.LocalPlayer.Character
 					local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
 	
@@ -3850,11 +3858,11 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 						task.wait(.1)
 						infJumpDeb = false
 					end
-				end)
+				end))
 			else
 			if infJumpCharConn then infJumpCharConn:Disconnect() infJumpCharConn = nil end
-				if infJumpConnection then infJumpConnection:Disconnect() end
-				if landedConnection then landedConnection:Disconnect() end
+				if infJumpConnection then infJumpConnection:Disconnect() infJumpConnection = nil end
+				if landedConnection then landedConnection:Disconnect() landedConnection = nil end
 				infJumps = 0
 				landed = true
 			end
@@ -4476,7 +4484,7 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 			antiFling = state
 			if state then
 				fu.notification("Anti-fling activated.")
-				flingDetectionCon = rs.Heartbeat:Connect(function()
+				flingDetectionCon = trackConn(rs.Heartbeat:Connect(function()
 					for _, pl in ipairs(game:GetService("Players"):GetPlayers()) do
 						if pl ~= game.Players.LocalPlayer and pl.Character and pl.Character:IsDescendantOf(workspace) and pl.Character.PrimaryPart then
 							if pl.Character.PrimaryPart.AssemblyAngularVelocity.Magnitude > 50 or pl.Character.PrimaryPart.AssemblyLinearVelocity.Magnitude > 100 then
@@ -4496,9 +4504,9 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 							end
 						end
 					end
-				end)
+				end))
 	
-				flingNeutralizerCon = rs.Heartbeat:Connect(function()
+				flingNeutralizerCon = trackConn(rs.Heartbeat:Connect(function()
 					if game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character.PrimaryPart then
 						if game.Players.LocalPlayer.Character.PrimaryPart.AssemblyLinearVelocity.Magnitude > 250 or  game.Players.LocalPlayer.Character.PrimaryPart.AssemblyAngularVelocity.Magnitude > 250 then
 							fu.notification("You were flung. Neutralizing velocity!")
@@ -4511,10 +4519,10 @@ local function SIXK_routine() -- Routine: StarterGui.YARHM.Universal
 							antiFlingLastPos = game.Players.LocalPlayer.Character.PrimaryPart.Position
 						end
 					end
-				end)
+				end))
 			else
-				flingDetectionCon:Disconnect()
-				flingNeutralizerCon:Disconnect()
+				if flingDetectionCon then flingDetectionCon:Disconnect() flingDetectionCon = nil end
+				if flingNeutralizerCon then flingNeutralizerCon:Disconnect() flingNeutralizerCon = nil end
 				detectedPlayers = {}
 				fu.notification("Anti-fling deactivated.")
 			end
@@ -6153,7 +6161,7 @@ end
 -- previous execution exit as soon as the counter no longer matches.
 local YGEN = getgenv().YARHM_EXTRA_GEN
 
-local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, ghost = false, blocking = false, keys = "ZXCVR", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, ghostT = 0, dist = 3}
+local stJ = {target = nil, follow = false, skills = false, block = false, dodge = false, bf = false, ghost = false, blocking = false, keys = "1234R", kp = 0, m1 = 0, dodgeT = 0, bfT = 0, ghostT = 0, dist = 3}
 
 local function buildJJSModule()
 	local module = {Name = "Jujutsu Shenanigans", gameId = 3508322461}
@@ -6175,15 +6183,18 @@ local function buildJJSModule()
 	end}})
 	table.insert(module, {Type = "Toggle", Args = {"Follow + auto M1", function(_, s) stJ.follow = s end}})
 	table.insert(module, {Type = "Toggle", Args = {"Auto skills (key rotation)", function(_, s) stJ.skills = s end}})
-	table.insert(module, {Type = "Input", Args = {"Skill keys (e.g. ZXCVR)", "Set", function(_, text)
+	table.insert(module, {Type = "Input", Args = {"Skill keys (e.g. 1234RG)", "Set", function(_, text)
 		if text and text ~= "" then
 			local seen = {}
-			stJ.keys = text:upper():gsub("[^A-Z]", ""):gsub("%a", function(k)
+			local cleaned = text:upper():gsub("[^1234RGZXCV]", ""):gsub(".", function(k)
 				if seen[k] then return "" end
 				seen[k] = true
 				return k
 			end)
-			yextraNotify("Skill keys: " .. stJ.keys)
+			if cleaned ~= "" then
+				stJ.keys = cleaned
+				yextraNotify("Skill keys: " .. stJ.keys)
+			end
 		end
 	end}})
 	table.insert(module, {Type = "Toggle", Args = {"Auto block", function(_, s)
@@ -7600,7 +7611,9 @@ local function buildTSBModule()
 				local _, y, _ = relativeCF:ToEulerAnglesXYZ()
 				if bav and bav.Parent then bav.AngularVelocity = Vector3.new(0, y * 30, 0) end
 			else
-				if elapsed >= 0.45 and not flipped then
+				-- Convert LethalAccuracy (1..30) into a 0.05s..0.60s flip timing window
+				local flipTime = math.clamp(lethalConfig.LethalAccuracy * 0.02, 0.05, 0.60)
+				if elapsed >= flipTime and not flipped then
 					root.CFrame = root.CFrame * CFrame.Angles(0, math.pi, 0)
 					flipped = true
 				end
